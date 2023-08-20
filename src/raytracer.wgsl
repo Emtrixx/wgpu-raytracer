@@ -8,12 +8,14 @@ struct Globals {
 @compute @workgroup_size(1,1,1)
 fn main(globals: Globals) {
 
+    let size: vec2<u32> = textureDimensions(color_buffer);
+
     let screen_pos: vec2<i32> = vec2<i32>(i32(globals.globalInvocationId.x), i32(globals.globalInvocationId.y));
 
     // Camera parameters
     let eye: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
     let fov: f32 = 60.0;
-    let aspect: f32 = f32(globals.num_workgroups.x) / f32(globals.num_workgroups.y);
+    let aspect: f32 = f32(size.x) / f32(size.y);
     let near: f32 = 0.01;
 
     // Sphere parameters
@@ -23,9 +25,9 @@ fn main(globals: Globals) {
     // Calculate ray direction for current pixel
     let plane_height: f32 = 2.0 * tan(fov * 0.5 * 3.14159 / 180.0) * near;
     let plane_width: f32 = plane_height * aspect;
-    let pixel_width: f32 = plane_width / f32(globals.num_workgroups.x);
-    let pixel_height: f32 = plane_height / f32(globals.num_workgroups.y);
-    let pixel_pos: vec2<f32> = vec2<f32>(f32(screen_pos.x) * pixel_width, f32(screen_pos.y) * pixel_height);
+    let pixel_width: f32 = plane_width / f32(size.x);
+    let pixel_height: f32 = plane_height / f32(size.y);
+    let pixel_pos: vec2<f32> = vec2<f32>(f32(screen_pos.x) * pixel_width - (plane_width / 2.0), f32(screen_pos.y) * pixel_height - (plane_height / 2.0));
     let ray_dir: vec3<f32> = normalize(vec3<f32>(pixel_pos.x, pixel_pos.y, -near));
     let pixel_pos_world: vec3<f32> = eye + ray_dir;
 
