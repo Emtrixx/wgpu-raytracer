@@ -6,6 +6,8 @@ use winit::{
 
 use wgpu::util::DeviceExt;
 
+mod camera;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
