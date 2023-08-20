@@ -41,7 +41,6 @@ struct State {
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
     window: Window,
-    texture_view: wgpu::TextureView,
     vertex_buffer: wgpu::Buffer,
     rt_pipeline: wgpu::ComputePipeline,
     rt_bind_group: wgpu::BindGroup,
@@ -57,17 +56,24 @@ impl State {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::VULKAN,
+            backends: wgpu::Backends::all(),
+            // backends: wgpu::Backends::GL,
             dx12_shader_compiler: Default::default(),
         });
+
+        instance
+            .enumerate_adapters(wgpu::Backends::all())
+            .for_each(|adapter| {
+                println!("Adapter: {:?}", adapter.get_info());
+            });
 
         let surface = unsafe { instance.create_surface(&window) }.unwrap();
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
-                // compatible_surface: Some(&surface),
-                compatible_surface: None,
+                compatible_surface: Some(&surface),
+                // compatible_surface: None,
                 force_fallback_adapter: false,
             })
             .await
@@ -78,8 +84,7 @@ impl State {
                 &wgpu::DeviceDescriptor {
                     features: wgpu::Features::union(
                         wgpu::Features::default(),
-                        wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                            | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY,
+                        wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES, // | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY,
                     ),
                     limits: wgpu::Limits::default(),
                     label: None,
@@ -100,7 +105,7 @@ impl State {
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: wgpu::TextureFormat::Rgba8Unorm,
+            format: wgpu::TextureFormat::Bgra8Unorm,
             width: size.width,
             height: size.height,
             present_mode: surface_caps.present_modes[0],
@@ -124,13 +129,11 @@ impl State {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST
-                | wgpu::TextureUsages::STORAGE_BINDING
-                | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                | wgpu::TextureUsages::STORAGE_BINDING,
+            // | wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: Some("diffuse_texture"),
             view_formats: &[],
         });
-
-        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let sampler_desc = wgpu::SamplerDescriptor {
             label: Some("raytracing sampler"),
@@ -157,8 +160,8 @@ impl State {
                 tex_coords: [1.0, 0.0],
             },
             Vertex {
-                position: [1.0, -1.0],
-                tex_coords: [1.0, 1.0],
+                position: [-1.0, 1.0],
+                tex_coords: [0.0, 0.0],
             },
             Vertex {
                 position: [-1.0, -1.0],
@@ -173,8 +176,8 @@ impl State {
                 tex_coords: [0.0, 1.0],
             },
             Vertex {
-                position: [-1.0, 1.0],
-                tex_coords: [0.0, 0.0],
+                position: [1.0, -1.0],
+                tex_coords: [1.0, 1.0],
             },
         ];
 
@@ -185,6 +188,11 @@ impl State {
         });
 
         // Raytracing
+
+        let rt_texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(wgpu::TextureFormat::Rgba8Unorm),
+            ..Default::default()
+        });
 
         let rt_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -206,7 +214,7 @@ impl State {
             layout: &rt_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(&texture_view),
+                resource: wgpu::BindingResource::TextureView(&rt_texture_view),
             }],
         });
 
@@ -243,7 +251,7 @@ impl State {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                    resource: wgpu::BindingResource::TextureView(&rt_texture_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -261,7 +269,6 @@ impl State {
             queue,
             config,
             size,
-            texture_view,
             vertex_buffer,
             rt_pipeline,
             rt_bind_group,
@@ -299,7 +306,6 @@ impl State {
             });
 
         // compute
-
         {
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("My fancy compute pass"),
@@ -320,30 +326,26 @@ impl State {
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
-                color_attachments: &[
-                    // This is what @location(0) in the fragment shader targets
-                    Some(wgpu::RenderPassColorAttachment {
-                        // view: &self.texture_view,
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color {
-                                r: 0.1,
-                                g: 0.2,
-                                b: 0.3,
-                                a: 1.0,
-                            }),
-                            store: true,
-                        },
-                    }),
-                ],
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 1.0,
+                        }),
+                        store: true,
+                    },
+                })],
                 depth_stencil_attachment: None,
             });
 
-            // NEW!
             render_pass.set_pipeline(&self.render_pipeline); // 2.
+            render_pass.set_bind_group(0, &self.render_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.draw(0..6, 0..1); // 3.        }
+            render_pass.draw(0..6, 0..1);
         }
         // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -457,35 +459,30 @@ fn create_render_pipeline(
             buffers: &[Vertex::desc()],
         },
         fragment: Some(wgpu::FragmentState {
-            // 3.
             module: &shader,
             entry_point: "fs_main",
             targets: &[Some(wgpu::ColorTargetState {
-                // 4.
                 format: config.format,
                 blend: Some(wgpu::BlendState::REPLACE),
                 write_mask: wgpu::ColorWrites::ALL,
             })],
         }),
         primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleList, // 1.
+            topology: wgpu::PrimitiveTopology::TriangleList,
             strip_index_format: None,
-            front_face: wgpu::FrontFace::Ccw, // 2.
+            front_face: wgpu::FrontFace::Ccw,
             cull_mode: Some(wgpu::Face::Back),
-            // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
             polygon_mode: wgpu::PolygonMode::Fill,
-            // Requires Features::DEPTH_CLIP_CONTROL
             unclipped_depth: false,
-            // Requires Features::CONSERVATIVE_RASTERIZATION
             conservative: false,
         },
-        depth_stencil: None, // 1.
+        depth_stencil: None,
         multisample: wgpu::MultisampleState {
-            count: 1,                         // 2.
-            mask: !0,                         // 3.
-            alpha_to_coverage_enabled: false, // 4.
+            count: 1,
+            mask: !0,
+            alpha_to_coverage_enabled: false,
         },
-        multiview: None, // 5.
+        multiview: None,
     });
 
     render_pipeline
