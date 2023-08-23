@@ -45,7 +45,6 @@ impl CameraUniform {
     }
 }
 
-
 // TODO: Needs rework for free camera movement
 pub struct CameraController {
     pub speed: f32,
@@ -70,11 +69,11 @@ impl CameraController {
         match event {
             WindowEvent::KeyboardInput {
                 input:
-                KeyboardInput {
-                    state,
-                    virtual_keycode: Some(keycode),
-                    ..
-                },
+                    KeyboardInput {
+                        state,
+                        virtual_keycode: Some(keycode),
+                        ..
+                    },
                 ..
             } => {
                 let is_pressed = *state == ElementState::Pressed;
