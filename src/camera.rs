@@ -3,10 +3,19 @@ use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 pub struct Camera {
     pub eye: cgmath::Point3<f32>,
     pub target: cgmath::Point3<f32>,
+    pub up: cgmath::Vector3<f32>,
     pub aspect: f32,
     pub fovy: f32,
     pub znear: f32,
-    pub up: cgmath::Vector3<f32>,
+}
+
+impl Camera {
+    pub fn build_transform_matrix(&self) -> cgmath::Matrix4<f32> {
+        // println!("Camera: {:?}", cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up));
+        // let transform = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up) * cgmath::Matrix4::from_translation(cgmath::Vector3::from([self.eye.x, self.eye.y, self.eye.z]));
+        let transform = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
+        return transform;
+    }
 }
 
 // We need this for Rust to store our data correctly for the shaders
@@ -16,18 +25,28 @@ pub struct Camera {
 pub struct CameraUniform {
     // We can't use cgmath with bytemuck directly so we'll have
     // to convert the Matrix4 into a 4x4 f32 array
-    pub view_proj: [[f32; 4]; 4],
+    pub rotation_matrix: [[f32; 4]; 4],
+    pub eye: [f32; 3],
+    // pub view_params: [f32; 3],
 }
 
 impl CameraUniform {
     pub fn new() -> Self {
         use cgmath::SquareMatrix;
         Self {
-            view_proj: cgmath::Matrix4::identity().into(),
+            rotation_matrix: cgmath::Matrix4::identity().into(),
+            eye: [0.0, 0.0, 0.0],
         }
+    }
+
+    pub fn update(&mut self, camera: &Camera) {
+        self.rotation_matrix = camera.build_transform_matrix().into();
+        self.eye = camera.eye.into();
     }
 }
 
+
+// TODO: Needs rework for free camera movement
 pub struct CameraController {
     pub speed: f32,
     pub is_forward_pressed: bool,
@@ -51,11 +70,11 @@ impl CameraController {
         match event {
             WindowEvent::KeyboardInput {
                 input:
-                    KeyboardInput {
-                        state,
-                        virtual_keycode: Some(keycode),
-                        ..
-                    },
+                KeyboardInput {
+                    state,
+                    virtual_keycode: Some(keycode),
+                    ..
+                },
                 ..
             } => {
                 let is_pressed = *state == ElementState::Pressed;

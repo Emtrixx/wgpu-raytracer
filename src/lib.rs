@@ -1,3 +1,13 @@
+use wgpu::{BindGroup, BindGroupLayout, Buffer, Device};
+/// This module contains the implementation of a raytracer using the wgpu library.
+///
+/// The `State` struct contains the state of the application, including the surface, device, queue, configuration, size, window, vertex buffer, render pipeline, and bind group.
+///
+/// The `Vertex` struct represents a vertex with position and texture coordinates.
+///
+/// The `impl Vertex` block contains a function `desc()` that returns a `VertexBufferLayout` for the vertex.
+///
+/// The `impl State` block contains an asynchronous function `new()` that creates a new `State` instance with the given `Window`.
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -5,6 +15,7 @@ use winit::{
 };
 
 use wgpu::util::DeviceExt;
+use crate::camera::{Camera, CameraController, CameraUniform};
 
 mod camera;
 
@@ -43,7 +54,11 @@ struct State {
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
     window: Window,
+    // Camera
+    camera_state: CameraState,
+    // Texture and Sampler
     vertex_buffer: wgpu::Buffer,
+    // Raytracing
     rt_pipeline: wgpu::ComputePipeline,
     rt_bind_group: wgpu::BindGroup,
     // Rendering
@@ -117,7 +132,6 @@ impl State {
         surface.configure(&device, &config);
 
         // Texture and Sampler
-
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
                 width: size.width,
@@ -154,40 +168,10 @@ impl State {
 
         let sampler = device.create_sampler(&sampler_desc);
 
-        // Quad
+        let vertex_buffer = Self::create_vertex_buffer(&device);
 
-        let vertices = [
-            Vertex {
-                position: [1.0, 1.0],
-                tex_coords: [1.0, 0.0],
-            },
-            Vertex {
-                position: [-1.0, 1.0],
-                tex_coords: [0.0, 0.0],
-            },
-            Vertex {
-                position: [-1.0, -1.0],
-                tex_coords: [0.0, 1.0],
-            },
-            Vertex {
-                position: [1.0, 1.0],
-                tex_coords: [1.0, 0.0],
-            },
-            Vertex {
-                position: [-1.0, -1.0],
-                tex_coords: [0.0, 1.0],
-            },
-            Vertex {
-                position: [1.0, -1.0],
-                tex_coords: [1.0, 1.0],
-            },
-        ];
-
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+        // Camera
+        let camera_state = CameraState::new(&device, &config);
 
         // Raytracing
 
@@ -208,7 +192,8 @@ impl State {
                         access: wgpu::StorageTextureAccess::WriteOnly,
                     },
                     count: None,
-                }],
+                },
+                ],
             });
 
         let rt_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -220,7 +205,7 @@ impl State {
             }],
         });
 
-        let rt_pipeline = create_compute_pipeline(&device, &rt_bind_group_layout);
+        let rt_pipeline = create_compute_pipeline(&device, &rt_bind_group_layout, &camera_state.bind_group_layout);
 
         // Rendering
 
@@ -272,11 +257,50 @@ impl State {
             config,
             size,
             vertex_buffer,
+            camera_state,
             rt_pipeline,
             rt_bind_group,
             render_pipeline,
             render_bind_group,
         }
+    }
+
+    fn create_vertex_buffer(device: &Device) -> Buffer {
+// Quad
+
+        let vertices = [
+            Vertex {
+                position: [1.0, 1.0],
+                tex_coords: [1.0, 0.0],
+            },
+            Vertex {
+                position: [-1.0, 1.0],
+                tex_coords: [0.0, 0.0],
+            },
+            Vertex {
+                position: [-1.0, -1.0],
+                tex_coords: [0.0, 1.0],
+            },
+            Vertex {
+                position: [1.0, 1.0],
+                tex_coords: [1.0, 0.0],
+            },
+            Vertex {
+                position: [-1.0, -1.0],
+                tex_coords: [0.0, 1.0],
+            },
+            Vertex {
+                position: [1.0, -1.0],
+                tex_coords: [1.0, 1.0],
+            },
+        ];
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(&vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        vertex_buffer
     }
 
     pub fn window(&self) -> &Window {
@@ -293,11 +317,22 @@ impl State {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        false
+        self.camera_state.controller.process_events(event)
     }
 
     fn update(&mut self) {
-        // todo!()
+        self.camera_state.controller.update_camera(&mut self.camera_state.object);
+        self.camera_state.uniform.update(&self.camera_state.object);
+        self.queue.write_buffer(
+            &self.camera_state.rotation_buffer,
+            0,
+            bytemuck::cast_slice(&[self.camera_state.uniform.rotation_matrix]),
+        );
+        self.queue.write_buffer(
+            &self.camera_state.eye_buffer,
+            0,
+            bytemuck::cast_slice(&[self.camera_state.uniform.eye]),
+        );
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -315,6 +350,7 @@ impl State {
 
             cpass.set_pipeline(&self.rt_pipeline);
             cpass.set_bind_group(0, &self.rt_bind_group, &[]);
+            cpass.set_bind_group(1, &self.camera_state.bind_group, &[]);
             cpass.dispatch_workgroups(self.config.width, self.config.height, 1);
         }
 
@@ -375,11 +411,11 @@ pub async fn run() {
                     WindowEvent::CloseRequested
                     | WindowEvent::KeyboardInput {
                         input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                ..
-                            },
+                        KeyboardInput {
+                            state: ElementState::Pressed,
+                            virtual_keycode: Some(VirtualKeyCode::Escape),
+                            ..
+                        },
                         ..
                     } => *control_flow = ControlFlow::Exit,
                     WindowEvent::Resized(physical_size) => {
@@ -416,10 +452,12 @@ pub async fn run() {
 fn create_compute_pipeline(
     device: &wgpu::Device,
     rt_bind_group_layout: &wgpu::BindGroupLayout,
-) -> wgpu::ComputePipeline {
+    camera_bind_group_layout: &wgpu::BindGroupLayout,
+) -> wgpu::ComputePipeline
+{
     let rt_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("My fancy compute pipeline layout"),
-        bind_group_layouts: &[rt_bind_group_layout],
+        bind_group_layouts: &[rt_bind_group_layout, camera_bind_group_layout],
         push_constant_ranges: &[],
     });
 
@@ -440,7 +478,8 @@ fn create_render_pipeline(
     config: &wgpu::SurfaceConfiguration,
     device: &wgpu::Device,
     render_bind_group_layout: &wgpu::BindGroupLayout,
-) -> wgpu::RenderPipeline {
+) -> wgpu::RenderPipeline
+{
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Shader"),
         source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
@@ -488,4 +527,101 @@ fn create_render_pipeline(
     });
 
     render_pipeline
+}
+
+
+/*
+ *  Camera
+ */
+struct CameraState {
+    object: Camera,
+    uniform: CameraUniform,
+    rotation_buffer: Buffer,
+    eye_buffer: Buffer,
+    bind_group: BindGroup,
+    controller: CameraController,
+    bind_group_layout: BindGroupLayout,
+}
+
+impl CameraState {
+    fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
+        let object = camera::Camera {
+            // position the camera one unit up and 2 units back
+            // +z is out of the screen
+            eye: (0.0, 3.0, -5.0).into(),
+            // have it look at the origin
+            target: (0.0, 0.0, 0.0).into(),
+            // which way is "up"
+            up: cgmath::Vector3::unit_y(),
+            aspect: config.width as f32 / config.height as f32,
+            fovy: 70.0,
+            znear: -0.01,
+        };
+
+        let mut uniform = camera::CameraUniform::new();
+        uniform.update(&object);
+
+        let rotation_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Camera Buffer"),
+            contents: bytemuck::cast_slice(&[uniform.rotation_matrix]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let eye_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Camera Eye Buffer"),
+            contents: bytemuck::cast_slice(&[uniform.eye]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        // let view_params
+
+        let bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("camera_bind_group_layout"),
+            });
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: rotation_buffer.as_entire_binding(),
+            }, wgpu::BindGroupEntry {
+                binding: 1,
+                resource: eye_buffer.as_entire_binding(),
+            }],
+            label: Some("camera_bind_group"),
+        });
+
+        let controller = camera::CameraController::new(0.2);
+
+        Self {
+            bind_group,
+            controller,
+            rotation_buffer,
+            eye_buffer,
+            uniform,
+            object,
+            bind_group_layout,
+        }
+    }
 }
