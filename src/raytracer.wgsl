@@ -2,6 +2,8 @@
 @group(1) @binding(0) var<uniform> camera_rotation: mat4x4<f32>;
 @group(1) @binding(1) var<uniform> camera_eye: vec3<f32>;
 
+const infinity: f32 = 10000000.0;
+
 struct Globals {
     @builtin(num_workgroups) num_workgroups: vec3<u32>,
     @builtin(global_invocation_id) globalInvocationId: vec3<u32>,
@@ -30,18 +32,48 @@ struct Ray {
     direction: vec3<f32>,
 };
 
+struct Sphere {
+    center: vec3<f32>,
+    radius: f32,
+    material: Material,
+};
+
+struct Material {
+    color: vec3<f32>,
+};
+
+// Sphere parameters
+const spheres: array<Sphere, 3> = array<Sphere, 3>(
+    Sphere (
+        vec3<f32>(0.0, 2.0, 0.0),
+        1.0,
+        Material (
+            vec3<f32>(0.0, 1.0, 0.0),
+        ),
+    ),
+    Sphere (
+        vec3<f32>(2.0, 0.0, 0.0),
+        1.0,
+        Material (
+            vec3<f32>(1.0, 0.0, 0.0),
+        ),
+    ),
+    Sphere (
+        vec3<f32>(0.0, 0.0, 2.0),
+        1.0,
+        Material (
+            vec3<f32>(0.0, 0.0, 1.0),
+        ),
+    ),
+);
 
 @compute @workgroup_size(1,1,1)
 fn main(globals: Globals) {
 
-    // Sphere parameters
-    let sphere_center: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
-    let sphere_radius: f32 = 1.0;
-
     let dimensions: vec2<u32> = textureDimensions(color_buffer);
 //    let screen_pos: vec2<i32> = vec2<i32>(i32(globals.globalInvocationId.x), i32(globals.globalInvocationId.y));
 //    let uv: vec2<f32> = vec2<f32>(f32(screen_pos.x) / f32(dimensions.x), f32(screen_pos.y) / f32(dimensions.y));
-    let uv: vec2<f32> = vec2<f32>(f32(globals.globalInvocationId.x) / f32(dimensions.x), f32(globals.globalInvocationId.y) / f32(dimensions.y));
+    let uv: vec2<f32> = vec2<f32>(f32(globals.globalInvocationId.x) / f32(dimensions.x), 1.0 - f32(globals.globalInvocationId.y) / f32(dimensions.y));
 
     // Calculate ray direction for current pixel
 
@@ -65,9 +97,10 @@ fn main(globals: Globals) {
 //
     let view_params: vec3<f32> = vec3<f32>(plane_width, plane_height, near);
 
-    let viewPointLocal: vec3<f32> = view_params * vec3<f32>(uv - 0.5, 1.0);
+    let viewPointLocal: vec3<f32> = vec3<f32>(uv - 0.5, 1.0) * view_params;
 
-    let viewPointWorld: vec3<f32> = vec3<f32>((camera.rotation * vec4<f32>(viewPointLocal, 1.0)).xyz) + camera.eye;
+    let viewPointWorld: vec3<f32> = vec3<f32>((vec4<f32>(viewPointLocal, 1.0) * camera.rotation).xyz) + camera.eye;
+//    let viewPointWorld: vec3<f32> = vec3<f32>((vec4<f32>(viewPointLocal, 1.0)).xyz) + camera.eye;
 
     // Other way
 //    let pixel_width: f32 = plane_width / f32(dimensions.x);
@@ -94,15 +127,42 @@ fn main(globals: Globals) {
 //    textureStore(color_buffer, globals.globalInvocationId.xy, vec4<f32>(ray.direction, 1.0));
 
     // Check for intersection with sphere
-    let hitInfo = sphereIntersect(ray, sphere_center, sphere_radius);
-    if (!hitInfo.hit) {
-        // No intersection, set pixel color to black
-        textureStore(color_buffer, globals.globalInvocationId.xy, vec4<f32>(ray.direction, 1.0));
-    } else {
-        // Intersection, set pixel color to green
-//        textureStore(color_buffer, globals.globalInvocationId.xy,  vec4<f32>(1.0, 1.0, 1.0, 1.0));
-        textureStore(color_buffer, globals.globalInvocationId.xy, vec4<f32>(0.0, 1.0, 0.0, 1.0));
-    }
+    var color: vec3<f32> = ray.direction;
+    var closestHitInfo: HitInfo = HitInfo (
+        false,
+        infinity,
+        vec3<f32>(0.0, 0.0, 0.0),
+        vec3<f32>(0.0, 0.0, 0.0),
+    );
+
+//   for (var i : u32 = 0u; i < 3u; i = i + 1u) {
+//        let sphere: Sphere = spheres[i];
+//        let hitInfo = sphereIntersect(ray, sphere.center, sphere.radius);
+//        if (hitInfo.hit && hitInfo.distance < closestHitInfo.distance) {
+//            closestHitInfo = hitInfo;
+//            color = spheres[i].material.color;
+//        }
+//    }
+var sphere: Sphere = spheres[0];
+var hitInfo = sphereIntersect(ray, sphere.center, sphere.radius);
+if (hitInfo.hit && hitInfo.distance < closestHitInfo.distance) {
+    closestHitInfo = hitInfo;
+    color = sphere.material.color;
+}
+sphere = spheres[1];
+hitInfo = sphereIntersect(ray, sphere.center, sphere.radius);
+if (hitInfo.hit && hitInfo.distance < closestHitInfo.distance) {
+    closestHitInfo = hitInfo;
+    color = sphere.material.color;
+}
+sphere = spheres[2];
+hitInfo = sphereIntersect(ray, sphere.center, sphere.radius);
+if (hitInfo.hit && hitInfo.distance < closestHitInfo.distance) {
+    closestHitInfo = hitInfo;
+    color = sphere.material.color;
+}
+
+    textureStore(color_buffer, globals.globalInvocationId.xy, vec4<f32>(color, 1.0));
 
 
 //    let ray_dir: vec3<f32> = normalize(vec3<f32>(pixel_pos.x, pixel_pos.y, -near));
@@ -134,7 +194,7 @@ struct HitInfo {
 fn sphereIntersect(ray: Ray, sphere_center: vec3<f32>, sphere_radius: f32) -> HitInfo {
     var hitInfo: HitInfo = HitInfo (
         false,
-        0.0,
+        infinity,
         vec3<f32>(0.0, 0.0, 0.0),
         vec3<f32>(0.0, 0.0, 0.0),
     );

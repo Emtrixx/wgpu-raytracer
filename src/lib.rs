@@ -548,14 +548,14 @@ impl CameraState {
         let object = camera::Camera {
             // position the camera one unit up and 2 units back
             // +z is out of the screen
-            eye: (0.0, 3.0, -5.0).into(),
+            eye: (0.0, 0.0, -5.0).into(),
             // have it look at the origin
             target: (0.0, 0.0, 0.0).into(),
             // which way is "up"
             up: cgmath::Vector3::unit_y(),
             aspect: config.width as f32 / config.height as f32,
             fovy: 70.0,
-            znear: -0.01,
+            znear: 0.01,
         };
 
         let mut uniform = camera::CameraUniform::new();

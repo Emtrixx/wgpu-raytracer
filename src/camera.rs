@@ -1,3 +1,4 @@
+use cgmath::SquareMatrix;
 use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 
 pub struct Camera {
@@ -13,7 +14,9 @@ impl Camera {
     pub fn build_transform_matrix(&self) -> cgmath::Matrix4<f32> {
         // println!("Camera: {:?}", cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up));
         // let transform = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up) * cgmath::Matrix4::from_translation(cgmath::Vector3::from([self.eye.x, self.eye.y, self.eye.z]));
-        let transform = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
+        // let transform = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
+        let mut transform = cgmath::Matrix4::look_at_lh(self.eye, self.target, self.up);
+        // transform = transform.invert().unwrap();
         return transform;
     }
 }
