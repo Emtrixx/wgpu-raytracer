@@ -1,29 +1,18 @@
-/// This module contains the implementation of a raytracer using the wgpu library.
-///
-/// The `State` struct contains the state of the application, including the surface, device, queue, configuration, size, window, vertex buffer, render pipeline, and bind group.
-///
-/// The `Vertex` struct represents a vertex with position and texture coordinates.
-///
-/// The `impl Vertex` block contains a function `desc()` that returns a `VertexBufferLayout` for the vertex.
-///
-/// The `impl State` block contains an asynchronous function `new()` that creates a new `State` instance with the given `Window`.
-///
+use crate::camera::camera_state::CameraState;
+use crate::pipelines::compute_pipeline::create_compute_pipeline;
+use crate::pipelines::render_pipeline::create_render_pipeline;
+use types::vertex;
+use wgpu::util::DeviceExt;
 use wgpu::{Buffer, Device};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
-use wgpu::util::DeviceExt;
-use types::vertex;
-use crate::camera::camera_state::CameraState;
-use crate::pipelines::compute_pipeline::create_compute_pipeline;
-use crate::pipelines::render_pipeline::create_render_pipeline;
 
-mod pipelines;
 mod camera;
+mod pipelines;
 mod types;
-
 
 struct State {
     surface: wgpu::Surface,
@@ -170,8 +159,7 @@ impl State {
                         access: wgpu::StorageTextureAccess::WriteOnly,
                     },
                     count: None,
-                },
-                ],
+                }],
             });
 
         let rt_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -183,7 +171,11 @@ impl State {
             }],
         });
 
-        let rt_pipeline = create_compute_pipeline(&device, &rt_bind_group_layout, &camera_state.bind_group_layout);
+        let rt_pipeline = create_compute_pipeline(
+            &device,
+            &rt_bind_group_layout,
+            &camera_state.bind_group_layout,
+        );
 
         // Rendering
 
@@ -244,7 +236,7 @@ impl State {
     }
 
     fn create_vertex_buffer(device: &Device) -> Buffer {
-// Quad
+        // Quad
 
         let vertices = [
             vertex::Vertex {
@@ -299,7 +291,9 @@ impl State {
     }
 
     fn update(&mut self) {
-        self.camera_state.controller.update_camera(&mut self.camera_state.object);
+        self.camera_state
+            .controller
+            .update_camera(&mut self.camera_state.object);
         self.camera_state.uniform.update(&self.camera_state.object);
         self.queue.write_buffer(
             &self.camera_state.rotation_buffer,
@@ -389,11 +383,11 @@ pub async fn run() {
                     WindowEvent::CloseRequested
                     | WindowEvent::KeyboardInput {
                         input:
-                        KeyboardInput {
-                            state: ElementState::Pressed,
-                            virtual_keycode: Some(VirtualKeyCode::Escape),
-                            ..
-                        },
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::Escape),
+                                ..
+                            },
                         ..
                     } => *control_flow = ControlFlow::Exit,
                     WindowEvent::Resized(physical_size) => {

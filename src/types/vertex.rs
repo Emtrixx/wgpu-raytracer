@@ -1,11 +1,15 @@
+/// A vertex with position and texture coordinates.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
+    /// The position of the vertex.
     pub position: [f32; 2],
+    /// The texture coordinates of the vertex.
     pub tex_coords: [f32; 2],
 }
 
 impl Vertex {
+    /// Returns the vertex buffer layout for this vertex type.
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,

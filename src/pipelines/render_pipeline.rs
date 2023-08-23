@@ -1,11 +1,27 @@
 use crate::types::vertex;
 
+/// Creates a new render pipeline with the given configuration, device, and render bind group layout.
+///
+/// # Arguments
+///
+/// * `config` - A reference to a `wgpu::SurfaceConfiguration` object that specifies the configuration of the surface.
+/// * `device` - A reference to a `wgpu::Device` object that represents the GPU device.
+/// * `render_bind_group_layout` - A reference to a `wgpu::BindGroupLayout` object that represents the layout of the bind group used for rendering.
+///
+/// # Returns
+///
+/// A `wgpu::RenderPipeline` object that represents the newly created render pipeline.
+///
+/// # Example
+///
+/// ```
+/// let render_pipeline = create_render_pipeline(&config, &device, &render_bind_group_layout);
+/// ```
 pub fn create_render_pipeline(
     config: &wgpu::SurfaceConfiguration,
     device: &wgpu::Device,
     render_bind_group_layout: &wgpu::BindGroupLayout,
-) -> wgpu::RenderPipeline
-{
+) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Shader"),
         source: wgpu::ShaderSource::Wgsl(include_str!("../shader/shader.wgsl").into()),
