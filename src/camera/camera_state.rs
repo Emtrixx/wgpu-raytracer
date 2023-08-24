@@ -6,8 +6,7 @@ use crate::camera::main_camera::{Camera, CameraUniform};
 pub struct CameraState {
     pub(crate) object: Camera,
     pub(crate) uniform: CameraUniform,
-    pub(crate) rotation_buffer: Buffer,
-    pub(crate) eye_buffer: Buffer,
+    pub(crate) buffer: Buffer,
     pub(crate) bind_group: BindGroup,
     pub(crate) controller: CameraController,
     pub(crate) bind_group_layout: BindGroupLayout,
@@ -31,15 +30,9 @@ impl CameraState {
         let mut uniform = CameraUniform::new();
         uniform.update(&object);
 
-        let rotation_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera Buffer"),
-            contents: bytemuck::cast_slice(&[uniform.rotation_matrix]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let eye_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Camera Eye Buffer"),
-            contents: bytemuck::cast_slice(&[uniform.eye]),
+            contents: bytemuck::cast_slice(&[uniform]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -56,17 +49,7 @@ impl CameraState {
                         min_binding_size: None,
                     },
                     count: None,
-                },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
+                }],
                 label: Some("camera_bind_group_layout"),
             });
 
@@ -74,10 +57,7 @@ impl CameraState {
             layout: &bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: rotation_buffer.as_entire_binding(),
-            }, wgpu::BindGroupEntry {
-                binding: 1,
-                resource: eye_buffer.as_entire_binding(),
+                resource: buffer.as_entire_binding(),
             }],
             label: Some("camera_bind_group"),
         });
@@ -87,8 +67,7 @@ impl CameraState {
         Self {
             bind_group,
             controller,
-            rotation_buffer,
-            eye_buffer,
+            buffer,
             uniform,
             object,
             bind_group_layout,

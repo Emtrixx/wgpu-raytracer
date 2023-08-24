@@ -21,6 +21,8 @@ struct State {
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
     window: Window,
+    // Spheres
+    sphere_state: types::sphere::SphereState,
     // Camera
     camera_state: CameraState,
     // Texture and Sampler
@@ -45,11 +47,12 @@ impl State {
             dx12_shader_compiler: Default::default(),
         });
 
-        instance
-            .enumerate_adapters(wgpu::Backends::all())
-            .for_each(|adapter| {
-                println!("Adapter: {:?}", adapter.get_info());
-            });
+        // List adapters
+        // instance
+        //     .enumerate_adapters(wgpu::Backends::all())
+        //     .for_each(|adapter| {
+        //         println!("Adapter: {:?}", adapter.get_info());
+        //     });
 
         let surface = unsafe { instance.create_surface(&window) }.unwrap();
 
@@ -137,6 +140,30 @@ impl State {
 
         let vertex_buffer = Self::create_vertex_buffer(&device);
 
+        // Spheres
+        let sphere1 = types::sphere::Sphere {
+            position: cgmath::Vector3::new(0.0, 1.0, 0.0),
+            radius: 1.0,
+            material_id: 0,
+        };
+        let sphere2 = types::sphere::Sphere {
+            position: cgmath::Vector3::new(0.0, -1.0, 0.0),
+            radius: 1.0,
+            material_id: 0,
+        };
+        let sphere3 = types::sphere::Sphere {
+            position: cgmath::Vector3::new(0.0, -1.0, 1.0),
+            radius: 1.0,
+            material_id: 0,
+        };
+        let sphere4 = types::sphere::Sphere {
+            position: cgmath::Vector3::new(0.0, -1.0, -1.0),
+            radius: 1.0,
+            material_id: 0,
+        };
+        let spheres = vec![sphere1, sphere2, sphere3, sphere4];
+        let sphere_state = types::sphere::SphereState::new(&spheres, &device);
+
         // Camera
         let camera_state = CameraState::new(&device, &config);
 
@@ -175,6 +202,7 @@ impl State {
             &device,
             &rt_bind_group_layout,
             &camera_state.bind_group_layout,
+            &sphere_state.bind_group_layout,
         );
 
         // Rendering
@@ -227,6 +255,7 @@ impl State {
             config,
             size,
             vertex_buffer,
+            sphere_state,
             camera_state,
             rt_pipeline,
             rt_bind_group,
@@ -294,16 +323,12 @@ impl State {
         self.camera_state
             .controller
             .update_camera(&mut self.camera_state.object);
+
         self.camera_state.uniform.update(&self.camera_state.object);
         self.queue.write_buffer(
-            &self.camera_state.rotation_buffer,
+            &self.camera_state.buffer,
             0,
-            bytemuck::cast_slice(&[self.camera_state.uniform.rotation_matrix]),
-        );
-        self.queue.write_buffer(
-            &self.camera_state.eye_buffer,
-            0,
-            bytemuck::cast_slice(&[self.camera_state.uniform.eye]),
+            bytemuck::cast_slice(&[self.camera_state.uniform]),
         );
     }
 
@@ -323,6 +348,7 @@ impl State {
             cpass.set_pipeline(&self.rt_pipeline);
             cpass.set_bind_group(0, &self.rt_bind_group, &[]);
             cpass.set_bind_group(1, &self.camera_state.bind_group, &[]);
+            cpass.set_bind_group(2, &self.sphere_state.bind_group, &[]);
             cpass.dispatch_workgroups(self.config.width, self.config.height, 1);
         }
 

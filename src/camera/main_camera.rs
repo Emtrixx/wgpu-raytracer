@@ -1,3 +1,5 @@
+use cgmath::Angle;
+
 pub struct Camera {
     pub eye: cgmath::Point3<f32>,
     pub target: cgmath::Point3<f32>,
@@ -16,6 +18,10 @@ impl Camera {
         // transform = transform.invert().unwrap();
         return transform;
     }
+
+    // pub fn change_fovy(&mut self, fovy: f32) {
+    //     self.fovy = fovy;
+    // }
 }
 
 // We need this for Rust to store our data correctly for the shaders
@@ -27,7 +33,9 @@ pub struct CameraUniform {
     // to convert the Matrix4 into a 4x4 f32 array
     pub rotation_matrix: [[f32; 4]; 4],
     pub eye: [f32; 3],
-    // pub view_params: [f32; 3],
+    pub _padding: u32,
+    pub view_params: [f32; 3],
+    pub _padding2: u32,
 }
 
 impl CameraUniform {
@@ -36,11 +44,25 @@ impl CameraUniform {
         Self {
             rotation_matrix: cgmath::Matrix4::identity().into(),
             eye: [0.0, 0.0, 0.0],
+            _padding: 0,
+            view_params: [0.0, 0.0, 0.0],
+            _padding2: 0,
         }
+    }
+
+    pub fn update_view_params(&mut self, camera: &Camera) {
+        let angle = cgmath::Deg(camera.fovy * 0.5).tan();
+        let plane_height: f32 = 2.0 * angle * camera.znear;
+        let plane_width: f32 = plane_height * camera.aspect;
+
+        self.view_params = [plane_width, plane_height, camera.znear];
     }
 
     pub fn update(&mut self, camera: &Camera) {
         self.rotation_matrix = camera.build_transform_matrix().into();
         self.eye = camera.eye.into();
+
+        // TODO: only on param change (maybe time for events?)
+        self.update_view_params(camera);
     }
 }

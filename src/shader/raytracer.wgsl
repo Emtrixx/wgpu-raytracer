@@ -1,7 +1,3 @@
-@group(0) @binding(0) var color_buffer: texture_storage_2d<rgba8unorm, write>;
-@group(1) @binding(0) var<uniform> camera_rotation: mat4x4<f32>;
-@group(1) @binding(1) var<uniform> camera_eye: vec3<f32>;
-
 const infinity: f32 = 10000000.0;
 
 struct Globals {
@@ -9,10 +5,38 @@ struct Globals {
     @builtin(global_invocation_id) globalInvocationId: vec3<u32>,
 };
 
+@group(0) @binding(0) var color_buffer: texture_storage_2d<rgba8unorm, write>;
+
 struct Camera {
    rotation: mat4x4<f32>,
    eye: vec3<f32>,
+   _padding: u32,
+   view_params: vec3<f32>,
+   _padding2: u32,
 }
+
+@group(1) @binding(0)
+var<uniform> camera: Camera;
+
+//struct Sphere {
+//    center: vec3<f32>,
+//    _padding: u32,
+//    radius: f32,
+//    material_id: u32,
+//};
+struct Sphere {
+    center: vec3<f32>,
+    radius: f32,
+};
+
+//struct SphereStorage {
+//    center: vec3<f32>,
+//    radius: f32,
+//    material_id: u32,
+//}
+
+@group (2) @binding(0) var<storage> spheres: array<Sphere>;
+
 
 //struct CameraRotation {
 //    rotation: mat4x4<f32>,
@@ -32,40 +56,51 @@ struct Ray {
     direction: vec3<f32>,
 };
 
-struct Sphere {
-    center: vec3<f32>,
-    radius: f32,
-    material: Material,
-};
+//struct Sphere {
+//    center: vec3<f32>,
+//    radius: f32,
+//    material: Material,
+//};
 
 struct Material {
     color: vec3<f32>,
 };
+const materials: array<Material,3> = array<Material, 3>(
+    Material (
+        vec3<f32>(1.0, 0.0, 0.0),
+    ),
+    Material (
+        vec3<f32>(0.0, 1.0, 0.0),
+    ),
+    Material (
+        vec3<f32>(0.0, 0.0, 1.0),
+    ));
 
 // Sphere parameters
-const spheres: array<Sphere, 3> = array<Sphere, 3>(
-    Sphere (
-        vec3<f32>(0.0, 2.0, 0.0),
-        1.0,
-        Material (
-            vec3<f32>(0.0, 1.0, 0.0),
-        ),
-    ),
-    Sphere (
-        vec3<f32>(2.0, 0.0, 0.0),
-        1.0,
-        Material (
-            vec3<f32>(1.0, 0.0, 0.0),
-        ),
-    ),
-    Sphere (
-        vec3<f32>(0.0, 0.0, 2.0),
-        1.0,
-        Material (
-            vec3<f32>(0.0, 0.0, 1.0),
-        ),
-    ),
-);
+//const spheres: array<Sphere, 3> = array<Sphere, 3>(
+//    Sphere (
+//        vec3<f32>(0.0, 2.0, 0.0),
+//        1.0,
+//        Material (
+//            vec3<f32>(0.0, 1.0, 0.0),
+//        ),
+//    ),
+//    Sphere (
+//        vec3<f32>(2.0, 0.0, 0.0),
+//        1.0,
+//        Material (
+//            vec3<f32>(1.0, 0.0, 0.0),
+//        ),
+//    ),
+//    Sphere (
+//        vec3<f32>(0.0, 0.0, 2.0),
+//        1.0,
+//        Material (
+//            vec3<f32>(0.0, 0.0, 1.0),
+//        ),
+//    ),
+//);
+
 
 @compute @workgroup_size(1,1,1)
 fn main(globals: Globals) {
@@ -78,24 +113,25 @@ fn main(globals: Globals) {
     // Calculate ray direction for current pixel
 
     // Camera parameters
-    let camera: Camera = Camera (
-        camera_rotation,
-        camera_eye,
-    );
+//    let camera: Camera = Camera (
+//        camera_rotation,
+//        camera_eye,
+//    );
 //    let eye: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
 //    let cameraTarget: vec3<f32> = vec3<f32>(0.0, 0.0, -1.0);
 //    let forward: vec3<f32> = normalize(cameraTarget - eye);
 
     // TODO put view_params into uniform buffer
-    let near: f32 = 0.1;
-    let fov: f32 = 70.0;
-    let aspect: f32 = f32(dimensions.x) / f32(dimensions.y);
-
-    let plane_height: f32 = 2.0 * tan(fov * 0.5 * 3.14159 / 180.0) * near;
-    let plane_width: f32 = plane_height * aspect;
-//    With UV
+//    let near: f32 = 0.1;
+//    let fov: f32 = 70.0;
+//    let aspect: f32 = f32(dimensions.x) / f32(dimensions.y);
 //
-    let view_params: vec3<f32> = vec3<f32>(plane_width, plane_height, near);
+//    let plane_height: f32 = 2.0 * tan(fov * 0.5 * 3.14159 / 180.0) * near;
+//    let plane_width: f32 = plane_height * aspect;
+////    With UV
+////
+//    let view_params: vec3<f32> = vec3<f32>(plane_width, plane_height, near);
+    let view_params: vec3<f32> = camera.view_params;
 
     let viewPointLocal: vec3<f32> = vec3<f32>(uv - 0.5, 1.0) * view_params;
 
@@ -127,7 +163,7 @@ fn main(globals: Globals) {
 //    textureStore(color_buffer, globals.globalInvocationId.xy, vec4<f32>(ray.direction, 1.0));
 
     // Check for intersection with sphere
-    var color: vec3<f32> = ray.direction;
+    var color: vec3<f32> = vec3<f32>(0.2, 0.2, 0.24);
     var closestHitInfo: HitInfo = HitInfo (
         false,
         infinity,
@@ -143,24 +179,28 @@ fn main(globals: Globals) {
 //            color = spheres[i].material.color;
 //        }
 //    }
-var sphere: Sphere = spheres[0];
-var hitInfo = sphereIntersect(ray, sphere.center, sphere.radius);
-if (hitInfo.hit && hitInfo.distance < closestHitInfo.distance) {
-    closestHitInfo = hitInfo;
-    color = sphere.material.color;
-}
-sphere = spheres[1];
-hitInfo = sphereIntersect(ray, sphere.center, sphere.radius);
-if (hitInfo.hit && hitInfo.distance < closestHitInfo.distance) {
-    closestHitInfo = hitInfo;
-    color = sphere.material.color;
-}
-sphere = spheres[2];
-hitInfo = sphereIntersect(ray, sphere.center, sphere.radius);
-if (hitInfo.hit && hitInfo.distance < closestHitInfo.distance) {
-    closestHitInfo = hitInfo;
-    color = sphere.material.color;
-}
+    for (var i = 0u; i < 4u; i++) {
+        let sphere = spheres[i];
+
+        var hitInfo = sphereIntersect(ray, sphere.center, sphere.radius);
+        if (hitInfo.hit && hitInfo.distance < closestHitInfo.distance) {
+            closestHitInfo = hitInfo;
+//            color = materials[sphere.material_id].color;
+            color = materials[0].color;
+        }
+    }
+//sphere = spheres[1];
+//hitInfo = sphereIntersect(ray, sphere.center, sphere.radius);
+//if (hitInfo.hit && hitInfo.distance < closestHitInfo.distance) {
+//    closestHitInfo = hitInfo;
+//    color = sphere.material.color;
+//}
+//sphere = spheres[2];
+//hitInfo = sphereIntersect(ray, sphere.center, sphere.radius);
+//if (hitInfo.hit && hitInfo.distance < closestHitInfo.distance) {
+//    closestHitInfo = hitInfo;
+//    color = sphere.material.color;
+//}
 
     textureStore(color_buffer, globals.globalInvocationId.xy, vec4<f32>(color, 1.0));
 
@@ -220,4 +260,8 @@ fn sphereIntersect(ray: Ray, sphere_center: vec3<f32>, sphere_radius: f32) -> Hi
     }
 
     return hitInfo;
+}
+
+fn rand(co: vec2 <f32>) -> f32 {
+    return fract(sin(dot(co, vec2<f32>(12.9898, 78.233))) * 43758.5453);
 }
