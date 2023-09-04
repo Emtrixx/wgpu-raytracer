@@ -11,11 +11,11 @@ pub struct Sphere {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct SphereUniform {
-    pub position_and_radius: [f32; 4],
-    // pub position: [f32; 3],
-    // pub _padding: u32,
-    // pub radius: f32,
-    // pub material_id: u32,
+    // pub position_and_radius: [f32; 4],
+    pub position: [f32; 3],
+    pub radius: f32,
+    pub material_id: u32,
+    pub _padding: [u32; 3],
 }
 
 pub struct SphereStorage {
@@ -41,15 +41,22 @@ impl SphereState {
 
         for sphere in objects {
             sphere_uniforms.push(SphereUniform {
-                position_and_radius: [sphere.position.x, sphere.position.y, sphere.position.z, sphere.radius],
-                // _padding: 0,
-                // radius: sphere.radius,
-                // material_id: sphere.material_id,
+                // position_and_radius: [sphere.position.x, sphere.position.y, sphere.position.z, sphere.radius],
+                position: sphere.position.into(),
+                radius: sphere.radius,
+                material_id: sphere.material_id,
+                _padding: [0, 0, 0],
             });
         }
 
         println!("Sphere count: {:?}", sphere_uniforms);
 
+
+        let sphere_metadata_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Sphere Metadata Buffer"),
+            contents: bytemuck::cast_slice(&[sphere_uniforms.len() as u32]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
 
         let storage_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Sphere Storage Buffer"),
@@ -59,8 +66,19 @@ impl SphereState {
 
         let object_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
+                entries: &[
+                wgpu::BindGroupLayoutEntry {
                     binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -74,8 +92,13 @@ impl SphereState {
 
         let object_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &object_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: sphere_metadata_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                binding: 1,
                 resource: storage_buffer.as_entire_binding(),
             }],
             label: Some("sphere_bind_group"),

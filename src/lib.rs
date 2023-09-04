@@ -161,7 +161,7 @@ impl State {
         // Spheres
         let sphere1 = types::sphere::Sphere {
             position: cgmath::Vector3::new(0.0, 1.0, 0.0),
-            radius: 1.0,
+            radius: 30.0,
             material_id: 0,
         };
         let sphere2 = types::sphere::Sphere {
@@ -179,7 +179,12 @@ impl State {
             radius: 1.0,
             material_id: 0,
         };
-        let spheres = vec![sphere1, sphere2, sphere3, sphere4];
+        let sphere5 = types::sphere::Sphere {
+            position: cgmath::Vector3::new(0.0, 0.0, 0.0),
+            radius: 1.0,
+            material_id: 1,
+        };
+        let spheres = vec![sphere1, sphere2, sphere3, sphere4, sphere5];
         let sphere_state = types::sphere::SphereState::new(&spheres, &device);
 
         // Camera

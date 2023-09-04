@@ -25,10 +25,15 @@ struct Camera {
 
 
 // Spheres
-@group (2) @binding(0) var<storage> spheres: array<Sphere>;
+@group (2) @binding(0) var<uniform> sphereMetadata: SphereMetadata;
+@group (2) @binding(1) var<storage> spheres: array<Sphere>;
+struct SphereMetadata {
+    count: u32,
+}
 struct Sphere {
-    center: vec3<f32>,
+    position: vec3<f32>,
     radius: f32,
+    material_id: u32,
 };
 
 
@@ -99,13 +104,14 @@ fn main(globals: Globals) {
         vec3<f32>(0.0, 0.0, 0.0),
     );
 
-    for (var i = 0u; i < 4u; i++) {
+    for (var i = 0u; i < sphereMetadata.count; i++) {
         let sphere = spheres[i];
 
-        var hitInfo = sphereIntersect(ray, sphere.center, sphere.radius);
+        var hitInfo = sphereIntersect(ray, sphere.position, sphere.radius);
         if (hitInfo.hit && hitInfo.distance < closestHitInfo.distance) {
             closestHitInfo = hitInfo;
-            color = materials[1].color;
+            let material = materials[sphere.material_id];
+            color = material.color;
         }
     }
 
