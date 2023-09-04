@@ -19,8 +19,8 @@ pub struct SphereUniform {
 }
 
 pub struct SphereStorage {
-    pub sphere_count: u32,
     pub spheres: Vec<SphereUniform>,
+    pub sphere_count: u32,
 }
 
 

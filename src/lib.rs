@@ -9,6 +9,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
+use crate::types::material::{Material, MaterialState};
 
 mod camera;
 mod pipelines;
@@ -21,6 +22,8 @@ struct State {
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
     window: Window,
+    // Materials
+    material_state: MaterialState,
     // Spheres
     sphere_state: types::sphere::SphereState,
     // Camera
@@ -138,7 +141,22 @@ impl State {
 
         let sampler = device.create_sampler(&sampler_desc);
 
+        // Vertex buffer for quad surface
         let vertex_buffer = Self::create_vertex_buffer(&device);
+
+        // Materials
+        let materials = vec![
+            Material {
+                color: [1.0, 0.0, 0.0],
+            },
+            Material {
+                color: [0.0, 1.0, 1.0],
+            },
+            Material {
+                color: [0.0, 0.0, 1.0],
+            },
+        ];
+        let material_state = MaterialState::new(&materials, &device);
 
         // Spheres
         let sphere1 = types::sphere::Sphere {
@@ -203,6 +221,7 @@ impl State {
             &rt_bind_group_layout,
             &camera_state.bind_group_layout,
             &sphere_state.bind_group_layout,
+            &material_state.bind_group_layout,
         );
 
         // Rendering
@@ -255,6 +274,7 @@ impl State {
             config,
             size,
             vertex_buffer,
+            material_state,
             sphere_state,
             camera_state,
             rt_pipeline,
@@ -349,6 +369,7 @@ impl State {
             cpass.set_bind_group(0, &self.rt_bind_group, &[]);
             cpass.set_bind_group(1, &self.camera_state.bind_group, &[]);
             cpass.set_bind_group(2, &self.sphere_state.bind_group, &[]);
+            cpass.set_bind_group(3, &self.material_state.bind_group, &[]);
             cpass.dispatch_workgroups(self.config.width, self.config.height, 1);
         }
 

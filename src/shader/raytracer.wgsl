@@ -1,12 +1,18 @@
 const infinity: f32 = 10000000.0;
 
+/*
+ * Bindings
+ */
+
 struct Globals {
     @builtin(num_workgroups) num_workgroups: vec3<u32>,
     @builtin(global_invocation_id) globalInvocationId: vec3<u32>,
 };
 
+// Color buffer
 @group(0) @binding(0) var color_buffer: texture_storage_2d<rgba8unorm, write>;
 
+// Camera
 struct Camera {
    rotation: mat4x4<f32>,
    eye: vec3<f32>,
@@ -18,6 +24,7 @@ struct Camera {
 @group(1) @binding(0)
 var<uniform> camera: Camera;
 
+// Spheres
 struct Sphere {
     center: vec3<f32>,
     radius: f32,
@@ -25,26 +32,42 @@ struct Sphere {
 
 @group (2) @binding(0) var<storage> spheres: array<Sphere>;
 
+// Materials
+@group (3) @binding(0) var<storage, read> materialStorage: MaterialStorage;
+struct Material {
+    color: vec3<f32>,
+//    _padding: u32,
+};
+struct MaterialStorage {
+    count: u32,
+//    _padding: vec3<u32>,
+    materials: array<Material>,
+};
+
+
+/*
+ * Internal types
+ */
 struct Ray {
     origin: vec3<f32>,
     direction: vec3<f32>,
 };
 
-struct Material {
-    color: vec3<f32>,
-};
+//const materials: array<Material,3> = array<Material, 3>(
+//    Material (
+//        vec3<f32>(1.0, 0.0, 0.0),
+//    ),
+//    Material (
+//        vec3<f32>(0.0, 1.0, 0.0),
+//    ),
+//    Material (
+//        vec3<f32>(0.0, 0.0, 1.0),
+//    ));
 
-const materials: array<Material,3> = array<Material, 3>(
-    Material (
-        vec3<f32>(1.0, 0.0, 0.0),
-    ),
-    Material (
-        vec3<f32>(0.0, 1.0, 0.0),
-    ),
-    Material (
-        vec3<f32>(0.0, 0.0, 1.0),
-    ));
 
+/*
+* Main
+*/
 @compute @workgroup_size(1,1,1)
 fn main(globals: Globals) {
 
@@ -80,7 +103,8 @@ fn main(globals: Globals) {
         var hitInfo = sphereIntersect(ray, sphere.center, sphere.radius);
         if (hitInfo.hit && hitInfo.distance < closestHitInfo.distance) {
             closestHitInfo = hitInfo;
-            color = materials[0].color;
+//            color = materialStorage.materials[0].color;
+            color = vec3(materialStorage.materials[0].xyz);
         }
     }
 
@@ -88,6 +112,9 @@ fn main(globals: Globals) {
 }
 
 
+/*
+ * Functions
+ */
 struct HitInfo {
     hit: bool,
     distance: f32,
@@ -125,6 +152,8 @@ fn sphereIntersect(ray: Ray, sphere_center: vec3<f32>, sphere_radius: f32) -> Hi
 
     return hitInfo;
 }
+
+// Utils
 
 fn rand(co: vec2 <f32>) -> f32 {
     return fract(sin(dot(co, vec2<f32>(12.9898, 78.233))) * 43758.5453);
