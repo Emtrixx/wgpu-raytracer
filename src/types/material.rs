@@ -15,47 +15,34 @@ pub struct Material {
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct MaterialUniform {
     pub color: [f32; 3],
-    // pub _padding: u32,
-}
-
-#[repr(C)]
-pub struct MaterialStorage {
-    pub material_count: u32,
-    // pub _padding: [u32; 3],
-    pub materials: Vec<MaterialUniform>,
+    pub _padding: u32,
 }
 
 pub struct MaterialState {
     pub buffer: wgpu::Buffer,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
-    // pub uniforms: Vec<MaterialUniform>,
-    pub storage: MaterialStorage,
+    pub uniforms: Vec<MaterialUniform>,
 }
 
 impl MaterialState {
     pub fn new(materials: &Vec<Material>, device: &wgpu::Device) -> MaterialState {
-        let material_uniforms: Vec<MaterialUniform> = materials.iter().map( |material| {
+        let material_uniforms: Vec<MaterialUniform> = materials.iter().map(|material| {
             MaterialUniform {
                 color: material.color,
-                // _padding: 0,
+                _padding: 0,
             }
         }).collect();
 
-        let storage = MaterialStorage {
-            material_count: material_uniforms.len() as u32,
-            // _padding: [0, 0, 0],
-            materials: material_uniforms.clone(),
-        };
+        let material_metadata_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Material Metadata Buffer"),
+            contents: bytemuck::cast_slice(&[material_uniforms.len() as u32]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
 
-
-        println!("Material count: {:?}", storage.material_count);
-        let storage_slize = unsafe { any_as_u8_slice(&storage) };
-        println!("Material storage: {:?}", storage_slize);
-
-        let storage_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let material_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Material Storage Buffer"),
-            contents: storage_slize,
+            contents: bytemuck::cast_slice(material_uniforms.as_slice()),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -65,12 +52,22 @@ impl MaterialState {
                     binding: 0,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
                     count: None,
-                }],
+                },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
                 label: Some("material_bind_group_layout"),
             });
 
@@ -78,16 +75,20 @@ impl MaterialState {
             layout: &object_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: storage_buffer.as_entire_binding(),
-            }],
+                resource: material_metadata_buffer.as_entire_binding(),
+            },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: material_buffer.as_entire_binding(),
+                }],
             label: Some("material_bind_group"),
         });
 
         Self {
-            buffer: storage_buffer,
+            buffer: material_buffer,
             bind_group_layout: object_bind_group_layout,
             bind_group: object_bind_group,
-            storage,
+            uniforms: material_uniforms,
         }
     }
 }

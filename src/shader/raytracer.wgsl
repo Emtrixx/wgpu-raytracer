@@ -13,6 +13,8 @@ struct Globals {
 @group(0) @binding(0) var color_buffer: texture_storage_2d<rgba8unorm, write>;
 
 // Camera
+@group(1) @binding(0)
+var<uniform> camera: Camera;
 struct Camera {
    rotation: mat4x4<f32>,
    eye: vec3<f32>,
@@ -21,28 +23,28 @@ struct Camera {
    _padding2: u32,
 }
 
-@group(1) @binding(0)
-var<uniform> camera: Camera;
 
 // Spheres
+@group (2) @binding(0) var<storage> spheres: array<Sphere>;
 struct Sphere {
     center: vec3<f32>,
     radius: f32,
 };
 
-@group (2) @binding(0) var<storage> spheres: array<Sphere>;
 
 // Materials
-@group (3) @binding(0) var<storage, read> materialStorage: MaterialStorage;
+@group (3) @binding(0) var<uniform> materialMetadata: MaterialMetadata;
+@group (3) @binding(1) var<storage, read> materials: array<Material>;
+struct MaterialMetadata {
+    count: u32,
+}
 struct Material {
     color: vec3<f32>,
-//    _padding: u32,
 };
-struct MaterialStorage {
-    count: u32,
-//    _padding: vec3<u32>,
-    materials: array<Material>,
-};
+//struct MaterialStorage {
+//    count: u32,
+//    materials: array<Material>,
+//};
 
 
 /*
@@ -103,8 +105,7 @@ fn main(globals: Globals) {
         var hitInfo = sphereIntersect(ray, sphere.center, sphere.radius);
         if (hitInfo.hit && hitInfo.distance < closestHitInfo.distance) {
             closestHitInfo = hitInfo;
-//            color = materialStorage.materials[0].color;
-            color = vec3(materialStorage.materials[0].xyz);
+            color = materials[1].color;
         }
     }
 
