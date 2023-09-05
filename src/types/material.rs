@@ -9,6 +9,8 @@ unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
 
 pub struct Material {
     pub color: [f32; 3],
+    pub emission_color: [f32; 3],
+    pub emission_strength: f32,
 }
 
 #[repr(C)]
@@ -16,6 +18,8 @@ pub struct Material {
 pub struct MaterialUniform {
     pub color: [f32; 3],
     pub _padding: u32,
+    pub emission_color: [f32; 3],
+    pub emission_strength: f32,
 }
 
 pub struct MaterialState {
@@ -31,6 +35,8 @@ impl MaterialState {
             MaterialUniform {
                 color: material.color,
                 _padding: 0,
+                emission_color: material.emission_color,
+                emission_strength: material.emission_strength,
             }
         }).collect();
 

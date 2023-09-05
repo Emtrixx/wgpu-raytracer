@@ -1,4 +1,9 @@
-const infinity: f32 = 10000000.0;
+const INFINITY: f32 = 10000000.0;
+const PI: f32 = 3.14159;
+const BACKGROUND_COLOR: vec3<f32> = vec3<f32>(0.2, 0.2, 0.2);
+const MAX_BOUNCE_COUNT: i32 = 5;
+var<private> state: f32;
+
 
 /*
  * Bindings
@@ -45,6 +50,8 @@ struct MaterialMetadata {
 }
 struct Material {
     color: vec3<f32>,
+    emission_color: vec3<f32>,
+    emission_strength: f32,
 };
 //struct MaterialStorage {
 //    count: u32,
@@ -80,7 +87,7 @@ fn main(globals: Globals) {
 
     let dimensions: vec2<u32> = textureDimensions(color_buffer);
     let uv: vec2<f32> = vec2<f32>(f32(globals.globalInvocationId.x) / f32(dimensions.x), 1.0 - f32(globals.globalInvocationId.y) / f32(dimensions.y));
-
+    state = fract(sin(dot(uv.xy ,vec2(12.9898,78.233))) * 43758.5453);
 
     let view_params: vec3<f32> = camera.view_params;
 
@@ -88,60 +95,109 @@ fn main(globals: Globals) {
 
     let viewPointWorld: vec3<f32> = vec3<f32>((vec4<f32>(viewPointLocal, 1.0) * camera.rotation).xyz) + camera.eye;
 
+    let pixel_width = 1.0 / f32(dimensions.x);
+    let pixel_height = 1.0 / f32(dimensions.y);
 
     // Ray
     let origin: vec3<f32> = camera.eye;
-    let ray: Ray = Ray (
-        origin,
-        normalize(viewPointWorld - origin),
-    );
+//    var ray: Ray =
 
-    var color: vec3<f32> = vec3<f32>(0.2, 0.2, 0.24);
-    var closestHitInfo: HitInfo = HitInfo (
-        false,
-        infinity,
-        vec3<f32>(0.0, 0.0, 0.0),
-        vec3<f32>(0.0, 0.0, 0.0),
-    );
+    let ray_count: u32 = 10u;
+    var incoming_light: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
+    for (var i = 0u; i < ray_count; i++) {
 
-    for (var i = 0u; i < sphereMetadata.count; i++) {
-        let sphere = spheres[i];
+//        let offset: vec3<f32> = vec3<f32>(rand(&state) * pixel_width, rand(&state) * pixel_height, 0.0);
+        let offset: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
 
-        var hitInfo = sphereIntersect(ray, sphere.position, sphere.radius);
-        if (hitInfo.hit && hitInfo.distance < closestHitInfo.distance) {
-            closestHitInfo = hitInfo;
-            let material = materials[sphere.material_id];
-            color = material.color;
-        }
+        incoming_light += trace_path(
+        Ray (
+             origin + offset,
+             normalize(viewPointWorld - origin),
+        ));
     }
+    incoming_light /= f32(ray_count);
 
-    textureStore(color_buffer, globals.globalInvocationId.xy, vec4<f32>(color, 1.0));
+    textureStore(color_buffer, globals.globalInvocationId.xy, vec4<f32>(incoming_light, 1.0));
+//    color = rand_direction(&state);
+//    textureStore(color_buffer, globals.globalInvocationId.xy, vec4<f32>(color, 1.0));
 }
 
 
 /*
  * Functions
  */
+fn trace_path(ray_param: Ray) -> vec3<f32> {
+    var ray: Ray = ray_param;
+    var ray_color: vec3<f32> = vec3<f32>(1.0, 1.0, 1.0);
+    var incoming_light: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
+
+    for (var i = 0; i < MAX_BOUNCE_COUNT; i++) {
+
+        var closestHitInfo: HitInfo = HitInfo (
+            false,
+            INFINITY,
+            vec3<f32>(0.0, 0.0, 0.0),
+            vec3<f32>(0.0, 0.0, 0.0),
+            0u,
+        );
+
+        for (var i = 0u; i < sphereMetadata.count; i++) {
+            let sphere = spheres[i];
+
+            var hitInfo = sphereIntersect(ray, sphere);
+            if (hitInfo.hit && hitInfo.distance < closestHitInfo.distance) {
+                closestHitInfo = hitInfo;
+            }
+        }
+
+
+        if (closestHitInfo.hit) {
+
+            let dir = rand_hemisphere_direction(&state, closestHitInfo.normal);
+
+            let bounce_ray: Ray = Ray (
+                closestHitInfo.position,
+//                normalize(closestHitInfo.normal + rand_direction(&state)),
+                dir,
+            );
+            ray = bounce_ray;
+
+            let material = materials[closestHitInfo.material_id];
+            let emission_color: vec3<f32> = material.emission_color * material.emission_strength;
+            incoming_light += emission_color * ray_color;
+            ray_color *= material.color;
+
+        } else {
+            incoming_light += get_environment_light(ray) * ray_color;
+            break;
+        }
+    }
+    return incoming_light;
+}
+
 struct HitInfo {
     hit: bool,
     distance: f32,
     position: vec3<f32>,
     normal: vec3<f32>,
+    material_id: u32,
 };
 
-fn sphereIntersect(ray: Ray, sphere_center: vec3<f32>, sphere_radius: f32) -> HitInfo {
+fn sphereIntersect(ray: Ray, sphere: Sphere) -> HitInfo {
+
     var hitInfo: HitInfo = HitInfo (
         false,
-        infinity,
+        INFINITY,
         vec3<f32>(0.0, 0.0, 0.0),
         vec3<f32>(0.0, 0.0, 0.0),
+        0u,
     );
 
-    let offsetRayOrigin = ray.origin - sphere_center;
+    let offsetRayOrigin = ray.origin - sphere.position;
 
     let a: f32 = dot(ray.direction, ray.direction);
     let b: f32 = 2.0 * dot(offsetRayOrigin, ray.direction);
-    let c: f32 = dot(offsetRayOrigin, offsetRayOrigin) - sphere_radius * sphere_radius;
+    let c: f32 = dot(offsetRayOrigin, offsetRayOrigin) - sphere.radius * sphere.radius;
 
     let discriminant: f32 = b * b - 4.0 * a * c;
 
@@ -149,19 +205,65 @@ fn sphereIntersect(ray: Ray, sphere_center: vec3<f32>, sphere_radius: f32) -> Hi
     if (discriminant >= 0.0) {
         let distance = (-b - sqrt(discriminant)) / (2.0 * a);
 
+        let position = ray.origin + ray.direction * hitInfo.distance;
+        let normal = normalize(position - sphere.position);
+
         if (distance >= 0.0) {
             hitInfo.hit = true;
             hitInfo.distance = distance;
-            hitInfo.position = ray.origin + ray.direction * hitInfo.distance;
-            hitInfo.normal = normalize(hitInfo.position - sphere_center);
+            hitInfo.position = position + normal * 0.00001;
+            hitInfo.normal = normal;
+            hitInfo.material_id = sphere.material_id;
         }
     }
 
     return hitInfo;
 }
 
+/*
 // Utils
+*/
 
-fn rand(co: vec2 <f32>) -> f32 {
-    return fract(sin(dot(co, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+// Light
+fn get_environment_light(ray: Ray) -> vec3<f32> {
+    // Ground
+    let ground_color = vec3<f32>(0.24, 0.2, 0.18);
+    // Sky
+    let sky_gradient_t = pow(smoothstep(0.0, 0.4, ray.direction.y), 0.35);
+    let sky_color_zenith = vec3<f32>(0.4, 0.6, 1.0);
+    let sky_color_horizon = vec3<f32>(0.8, 0.8, 0.8);
+    let sky_color = mix(sky_color_horizon, sky_color_zenith, sky_gradient_t);
+    // Mix
+    let ground_to_sky_t = smoothstep(-0.01, 0.0, ray.direction.y);
+    return mix(ground_color, sky_color, ground_to_sky_t);
+//    return vec3<f32>(0.2, 0.2, 0.2);
+}
+
+// Random
+fn rand(seed: ptr<private,f32>) -> f32 {
+    *seed = fract(sin(*seed) * 43758.5453);
+    return *seed;
+}
+
+fn rand_normal(seed: ptr<private,f32>) -> f32 {
+    let theta = 2.0 * PI * rand(seed);
+    let r = sqrt(-2.0 * log(rand(seed)));
+    return r * cos(theta);
+}
+
+fn rand_direction(seed: ptr<private,f32>) -> vec3<f32> {
+    let x = rand_normal(seed);
+    let y = rand_normal(seed);
+    let z = rand_normal(seed);
+    return  normalize(vec3<f32>(x, y, z));
+}
+
+fn rand_hemisphere_direction(seed: ptr<private,f32>, normal: vec3<f32>) -> vec3<f32> {
+    var direction = rand_direction(seed);
+
+    if (dot(direction, normal) < 0.0) {
+        return -direction;
+    };
+
+    return direction;
 }

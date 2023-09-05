@@ -147,44 +147,47 @@ impl State {
         // Materials
         let materials = vec![
             Material {
-                color: [1.0, 0.0, 0.0],
+                color: [0.8, 0.0, 0.0],
+                emission_color: [0.0, 0.0, 0.0],
+                emission_strength: 0.0,
             },
             Material {
-                color: [0.0, 1.0, 1.0],
+                color: [1.0, 1.0, 1.0],
+                emission_color: [1.0, 1.0, 1.0],
+                emission_strength: 1.0,
             },
             Material {
-                color: [0.0, 0.0, 1.0],
+                color: [0.0, 0.0, 0.8],
+                emission_color: [0.0, 0.0, 0.0],
+                emission_strength: 0.0,
             },
         ];
         let material_state = MaterialState::new(&materials, &device);
 
         // Spheres
-        let sphere1 = types::sphere::Sphere {
-            position: cgmath::Vector3::new(0.0, 1.0, 0.0),
-            radius: 30.0,
-            material_id: 0,
-        };
-        let sphere2 = types::sphere::Sphere {
-            position: cgmath::Vector3::new(0.0, -1.0, 0.0),
-            radius: 1.0,
-            material_id: 0,
-        };
-        let sphere3 = types::sphere::Sphere {
-            position: cgmath::Vector3::new(0.0, -1.0, 1.0),
-            radius: 1.0,
-            material_id: 0,
-        };
-        let sphere4 = types::sphere::Sphere {
-            position: cgmath::Vector3::new(0.0, -1.0, -1.0),
-            radius: 1.0,
-            material_id: 0,
-        };
-        let sphere5 = types::sphere::Sphere {
-            position: cgmath::Vector3::new(0.0, 0.0, 0.0),
-            radius: 1.0,
-            material_id: 1,
-        };
-        let spheres = vec![sphere1, sphere2, sphere3, sphere4, sphere5];
+        let spheres = vec![
+            types::sphere::Sphere {
+                position: cgmath::Vector3::new(-3.0, 0.0, 0.0),
+                radius: 1.0,
+                material_id: 0,
+            },
+            types::sphere::Sphere {
+                position: cgmath::Vector3::new(0.0, -50.0, 400.0),
+                radius: 300.0,
+                material_id: 1,
+            },
+            types::sphere::Sphere {
+                position: cgmath::Vector3::new(3.0, 0.0, 0.0),
+                radius: 1.0,
+                material_id: 2,
+            },
+            types::sphere::Sphere {
+                position: cgmath::Vector3::new(0.0, -52.0, 3.0),
+                radius: 50.0,
+                material_id: 0,
+            },
+        ];
+
         let sphere_state = types::sphere::SphereState::new(&spheres, &device);
 
         // Camera
@@ -435,11 +438,11 @@ pub async fn run() {
                     WindowEvent::CloseRequested
                     | WindowEvent::KeyboardInput {
                         input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                ..
-                            },
+                        KeyboardInput {
+                            state: ElementState::Pressed,
+                            virtual_keycode: Some(VirtualKeyCode::Escape),
+                            ..
+                        },
                         ..
                     } => *control_flow = ControlFlow::Exit,
                     WindowEvent::Resized(physical_size) => {

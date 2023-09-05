@@ -14,6 +14,7 @@ impl Camera {
         // println!("Camera: {:?}", cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up));
         // let transform = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up) * cgmath::Matrix4::from_translation(cgmath::Vector3::from([self.eye.x, self.eye.y, self.eye.z]));
         // let transform = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
+        // TODO: rotation and translation at once?
         let transform = cgmath::Matrix4::look_at_lh(self.eye, self.target, self.up);
         // transform = transform.invert().unwrap();
         return transform;
@@ -62,7 +63,7 @@ impl CameraUniform {
         self.rotation_matrix = camera.build_transform_matrix().into();
         self.eye = camera.eye.into();
 
-        // TODO: only on param change (maybe time for events?)
+        // TODO: only on param change (maybe use events?)
         self.update_view_params(camera);
     }
 }
