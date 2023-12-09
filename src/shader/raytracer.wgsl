@@ -1,24 +1,31 @@
 const INFINITY: f32 = 10000000.0;
 const PI: f32 = 3.14159;
 const BACKGROUND_COLOR: vec3<f32> = vec3<f32>(0.2, 0.2, 0.2);
+const RAY_COUNT: u32 = 10u;
 const MAX_BOUNCE_COUNT: i32 = 5;
-var<private> state: f32;
+var<private> state: u32;
 
 
 /*
  * Bindings
  */
 
+// Color buffer
+@group(0) @binding(0) var color_buffer: texture_storage_2d<rgba8unorm, write>;
+
+@group(0) @binding(1)
+var<uniform> extern_globals: ExternGlobals;
+struct ExternGlobals {
+    timestamp: u32,
+};
+
 struct Globals {
     @builtin(num_workgroups) num_workgroups: vec3<u32>,
     @builtin(global_invocation_id) globalInvocationId: vec3<u32>,
 };
 
-// Color buffer
-@group(0) @binding(0) var color_buffer: texture_storage_2d<rgba8unorm, write>;
-
 // Camera
-@group(0) @binding(1)
+@group(0) @binding(2)
 var<uniform> camera: Camera;
 struct Camera {
    rotation: mat4x4<f32>,
@@ -30,8 +37,8 @@ struct Camera {
 
 
 // Spheres
-@group (0) @binding(2) var<uniform> sphereMetadata: SphereMetadata;
-@group (0) @binding(3) var<storage> spheres: array<Sphere>;
+@group (0) @binding(3) var<uniform> sphereMetadata: SphereMetadata;
+@group (0) @binding(4) var<storage> spheres: array<Sphere>;
 struct SphereMetadata {
     count: u32,
 }
@@ -43,8 +50,8 @@ struct Sphere {
 
 
 // Materials
-@group (0) @binding(4) var<uniform> materialMetadata: MaterialMetadata;
-@group (0) @binding(5) var<storage, read> materials: array<Material>;
+@group (0) @binding(5) var<uniform> materialMetadata: MaterialMetadata;
+@group (0) @binding(6) var<storage, read> materials: array<Material>;
 struct MaterialMetadata {
     count: u32,
 }
@@ -87,7 +94,10 @@ fn main(globals: Globals) {
 
     let dimensions: vec2<u32> = textureDimensions(color_buffer);
     let uv: vec2<f32> = vec2<f32>(f32(globals.globalInvocationId.x) / f32(dimensions.x), 1.0 - f32(globals.globalInvocationId.y) / f32(dimensions.y));
-    state = fract(sin(dot(uv.xy ,vec2(12.9898,78.233))) * 43758.5453);
+//    state = fract(sin(dot(uv.xy * f32(extern_globals.timestamp) ,vec2(12.9898,78.233))) * 43758.5453);
+    state = globals.globalInvocationId.x;
+    let r: u32 = pcrng(&state);
+    state = r + globals.globalInvocationId.y;
 
     let view_params: vec3<f32> = camera.view_params;
 
@@ -102,9 +112,8 @@ fn main(globals: Globals) {
     let origin: vec3<f32> = camera.eye;
 //    var ray: Ray =
 
-    let ray_count: u32 = 10u;
     var incoming_light: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
-    for (var i = 0u; i < ray_count; i++) {
+    for (var i = 0u; i < RAY_COUNT; i++) {
 
         let offset: vec3<f32> = vec3<f32>(rand(&state) * pixel_width, rand(&state) * pixel_height, 0.0);
 //        let offset: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
@@ -116,8 +125,9 @@ fn main(globals: Globals) {
             )
         );
     }
-    incoming_light /= f32(ray_count);
+    incoming_light /= f32(RAY_COUNT);
 //    incoming_light = rand_direction(&state);
+//    incoming_light = vec3<f32>(rand(&state), rand(&state), rand(&state));
 
     textureStore(color_buffer, globals.globalInvocationId.xy, vec4<f32>(incoming_light, 1.0));
 }
@@ -156,7 +166,9 @@ fn trace_path(ray_param: Ray) -> vec3<f32> {
 //            incoming_light = closestHitInfo.normal;
 //            break;
 
-            let dir = rand_hemisphere_direction(&state, closestHitInfo.normal);
+//            let dir = rand_hemisphere_direction(&state, closestHitInfo.normal);
+            // distribution of rays shifted to the normal
+            let dir = normalize(closestHitInfo.normal + rand_direction(&state));
 
             let bounce_ray: Ray = Ray (
                 closestHitInfo.position,
@@ -214,7 +226,7 @@ fn sphereIntersect(ray: Ray, sphere: Sphere) -> HitInfo {
 
             hitInfo.hit = true;
             hitInfo.distance = distance;
-            hitInfo.position = position + normal * 0.00001;
+            hitInfo.position = position + (normal * 0.001);
             hitInfo.normal = normal;
             hitInfo.material_id = sphere.material_id;
         }
@@ -243,26 +255,31 @@ fn get_environment_light(ray: Ray) -> vec3<f32> {
 }
 
 // Random
-fn rand(seed: ptr<private,f32>) -> f32 {
-    *seed = fract(sin(*seed) * 43758.5453);
-    return *seed;
+fn pcrng(state: ptr<private,u32>) -> u32 {
+    *state = *state * 747796405u + 2891336453u;
+    var result = ((*state >> ((*state >> 28u) + 4u)) ^ *state) * 277803737u;
+    return (result >> 22u) ^ result;
 }
 
-fn rand_normal(seed: ptr<private,f32>) -> f32 {
-    let theta = 2.0 * PI * rand(seed);
-    let r = sqrt(-2.0 * log(rand(seed)));
+fn rand(state: ptr<private,u32>) -> f32 {
+    return  f32(pcrng(state)) / 4294967295.0f;
+}
+
+fn rand_normal(state: ptr<private,u32>) -> f32 {
+    let theta = 2.0 * PI * rand(state);
+    let r = sqrt(-2.0 * log(rand(state)));
     return r * cos(theta);
 }
 
-fn rand_direction(seed: ptr<private,f32>) -> vec3<f32> {
-    let x = rand_normal(seed);
-    let y = rand_normal(seed);
-    let z = rand_normal(seed);
+fn rand_direction(state: ptr<private,u32>) -> vec3<f32> {
+    let x = rand_normal(state);
+    let y = rand_normal(state);
+    let z = rand_normal(state);
     return  normalize(vec3<f32>(x, y, z));
 }
 
-fn rand_hemisphere_direction(seed: ptr<private,f32>, normal: vec3<f32>) -> vec3<f32> {
-    var direction = rand_direction(seed);
+fn rand_hemisphere_direction(state: ptr<private,u32>, normal: vec3<f32>) -> vec3<f32> {
+    var direction = rand_direction(state);
 
     if (dot(direction, normal) < 0.0) {
         return -direction;

@@ -44,4 +44,11 @@ impl CameraState {
             object,
         }
     }
+
+    pub(crate) fn update(&mut self, queue: &wgpu::Queue) {
+        self.controller.update_camera(&mut self.object);
+        self.uniform.update(&self.object);
+
+        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[self.uniform]));
+    }
 }

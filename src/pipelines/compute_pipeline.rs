@@ -1,6 +1,7 @@
 use wgpu::{BindGroup, ComputePipeline};
 
 use crate::camera::camera_state::CameraState;
+use crate::types::globals::GlobalState;
 use crate::types::material::MaterialState;
 use crate::types::sphere::SphereState;
 
@@ -18,6 +19,7 @@ use crate::types::sphere::SphereState;
 pub fn create_compute_pipeline(
     device: &wgpu::Device,
     rt_texture_view: &wgpu::TextureView,
+    global_state: &GlobalState,
     camera_state: &CameraState,
     sphere_state: &SphereState,
     material_state: &MaterialState,
@@ -39,7 +41,7 @@ pub fn create_compute_pipeline(
                     },
                     count: None,
                 },
-                //Camera
+                // Globals
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::COMPUTE,
@@ -50,7 +52,7 @@ pub fn create_compute_pipeline(
                     },
                     count: None,
                 },
-                // Spheres
+                //Camera
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStages::COMPUTE,
@@ -61,8 +63,19 @@ pub fn create_compute_pipeline(
                     },
                     count: None,
                 },
+                // Spheres
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -73,7 +86,7 @@ pub fn create_compute_pipeline(
                 },
                 // Material
                 wgpu::BindGroupLayoutEntry {
-                    binding: 4,
+                    binding: 5,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
@@ -83,7 +96,7 @@ pub fn create_compute_pipeline(
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
-                    binding: 5,
+                    binding: 6,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -104,29 +117,34 @@ pub fn create_compute_pipeline(
                 binding: 0,
                 resource: wgpu::BindingResource::TextureView(rt_texture_view),
             },
-            // Binding 1: camera
+            // Binding 1: globals
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: camera_state.buffer.as_entire_binding(),
+                resource: global_state.buffer.as_entire_binding(),
             },
-            // Binding 2: sphere metadata
+            // Binding 2: camera
             wgpu::BindGroupEntry {
                 binding: 2,
-                resource: sphere_state.metadata_buffer.as_entire_binding(),
+                resource: camera_state.buffer.as_entire_binding(),
             },
-            // Binding 3: sphere buffer
+            // Binding 3: sphere metadata
             wgpu::BindGroupEntry {
                 binding: 3,
-                resource: sphere_state.buffer.as_entire_binding(),
+                resource: sphere_state.metadata_buffer.as_entire_binding(),
             },
-            // Binding 4: material metadata
+            // Binding 4: sphere buffer
             wgpu::BindGroupEntry {
                 binding: 4,
-                resource: material_state.metadata_buffer.as_entire_binding(),
+                resource: sphere_state.buffer.as_entire_binding(),
             },
-            // Binding 5: material buffer
+            // Binding 5: material metadata
             wgpu::BindGroupEntry {
                 binding: 5,
+                resource: material_state.metadata_buffer.as_entire_binding(),
+            },
+            // Binding 6: material buffer
+            wgpu::BindGroupEntry {
+                binding: 6,
                 resource: material_state.buffer.as_entire_binding(),
             }
         ],

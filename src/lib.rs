@@ -9,6 +9,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
+use crate::types::globals::GlobalState;
 use crate::types::material::{Material, MaterialState};
 
 mod camera;
@@ -22,6 +23,8 @@ struct State {
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
     window: Window,
+    // Globals
+    global_state: GlobalState,
     // Materials
     material_state: MaterialState,
     // Spheres
@@ -149,9 +152,11 @@ impl State {
             ..Default::default()
         });
 
-
         // Vertex buffer for quad surface
         let vertex_buffer = Self::create_vertex_buffer(&device);
+
+        // Globals
+        let global_state = GlobalState::new(&device);
 
         // Materials
         let materials = vec![
@@ -170,6 +175,12 @@ impl State {
                 emission_color: [0.0, 0.0, 0.0],
                 emission_strength: 0.0,
             },
+            // ground
+            Material {
+                color: [0.4, 0.4, 0.4],
+                emission_color: [0.0, 0.0, 0.0],
+                emission_strength: 0.0,
+            },
         ];
         let material_state = MaterialState::new(&materials, &device);
 
@@ -181,8 +192,8 @@ impl State {
                 material_id: 0,
             },
             types::sphere::Sphere {
-                position: cgmath::Vector3::new(0.0, -50.0, 400.0),
-                radius: 300.0,
+                position: cgmath::Vector3::new(0.0, 150.0, 100.0),
+                radius: 100.0,
                 material_id: 1,
             },
             types::sphere::Sphere {
@@ -191,9 +202,9 @@ impl State {
                 material_id: 2,
             },
             types::sphere::Sphere {
-                position: cgmath::Vector3::new(0.0, -52.0, 3.0),
+                position: cgmath::Vector3::new(0.0, -51.0, 3.0),
                 radius: 50.0,
-                material_id: 0,
+                material_id: 3,
             },
         ];
 
@@ -206,6 +217,7 @@ impl State {
         let (rt_pipeline, rt_bind_group) = create_compute_pipeline(
             &device,
             &rt_texture_view,
+            &global_state,
             &camera_state,
             &sphere_state,
             &material_state,
@@ -260,6 +272,7 @@ impl State {
             config,
             size,
             vertex_buffer,
+            global_state,
             material_state,
             sphere_state,
             camera_state,
@@ -326,16 +339,10 @@ impl State {
     }
 
     fn update(&mut self) {
-        self.camera_state
-            .controller
-            .update_camera(&mut self.camera_state.object);
-
-        self.camera_state.uniform.update(&self.camera_state.object);
-        self.queue.write_buffer(
-            &self.camera_state.buffer,
-            0,
-            bytemuck::cast_slice(&[self.camera_state.uniform]),
-        );
+        // update global state
+        self.global_state.update(&self.queue);
+        // update camera
+        self.camera_state.update(&self.queue);
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
