@@ -1,7 +1,4 @@
-use winit::event::{ElementState, KeyEvent, WindowEvent};
-use winit::event::DeviceEvent::Key;
-use winit::keyboard::PhysicalKey;
-
+use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 use crate::camera::main_camera;
 
 // TODO: Needs rework for free camera movement
@@ -27,28 +24,29 @@ impl CameraController {
     pub fn process_events(&mut self, event: &WindowEvent) -> bool {
         match event {
             WindowEvent::KeyboardInput {
-                event: KeyEvent {
-                    state,
-                    physical_key: keycode,
-                    ..
-                },
+                input:
+                    KeyboardInput {
+                        state,
+                        virtual_keycode: Some(keycode),
+                        ..
+                    },
                 ..
             } => {
                 let is_pressed = *state == ElementState::Pressed;
                 match keycode {
-                    PhysicalKey::Code(W) => {
+                    VirtualKeyCode::W | VirtualKeyCode::Up => {
                         self.is_forward_pressed = is_pressed;
                         true
                     }
-                    PhysicalKey::Code(A) => {
+                    VirtualKeyCode::A | VirtualKeyCode::Left => {
                         self.is_left_pressed = is_pressed;
                         true
                     }
-                    PhysicalKey::Code(S) => {
+                    VirtualKeyCode::S | VirtualKeyCode::Down => {
                         self.is_backward_pressed = is_pressed;
                         true
                     }
-                    PhysicalKey::Code(D) => {
+                    VirtualKeyCode::D | VirtualKeyCode::Right => {
                         self.is_right_pressed = is_pressed;
                         true
                     }

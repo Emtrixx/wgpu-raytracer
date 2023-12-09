@@ -1,16 +1,14 @@
-use std::time::{Duration, Instant};
 use crate::camera::camera_state::CameraState;
 use crate::pipelines::compute_pipeline::create_compute_pipeline;
 use crate::pipelines::render_pipeline::create_render_pipeline;
 use types::vertex;
 use wgpu::util::DeviceExt;
-use wgpu::{Buffer, Device, Gles3MinorVersion};
+use wgpu::{Buffer, Device};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
-use winit::keyboard::{KeyCode, PhysicalKey};
 use crate::types::material::{Material, MaterialState};
 
 mod camera;
@@ -50,8 +48,6 @@ impl State {
             backends: wgpu::Backends::all(),
             // backends: wgpu::Backends::GL,
             dx12_shader_compiler: Default::default(),
-            flags: wgpu::InstanceFlags::default(),
-            gles_minor_version: Gles3MinorVersion::Automatic,
         });
 
         // List adapters
@@ -375,7 +371,6 @@ impl State {
         {
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("My fancy compute pass"),
-                timestamp_writes: None,
             });
 
             cpass.set_pipeline(&self.rt_pipeline);
@@ -406,12 +401,10 @@ impl State {
                             b: 0.3,
                             a: 1.0,
                         }),
-                        store: wgpu::StoreOp::Store
+                        store: true,
                     },
                 })],
                 depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
             });
 
             render_pass.set_pipeline(&self.render_pipeline); // 2.
@@ -444,43 +437,39 @@ pub async fn run() {
                 match event {
                     WindowEvent::CloseRequested
                     | WindowEvent::KeyboardInput {
-                        event:
-                        WindowEvent::KeyboardInput {
-                            event: KeyEvent {
-                                state: ElementState::Pressed,
-                                physical_key: PhysicalKey::Code(KeyCode::Escape),
-                                ..
-                            } ,
+                        input:
+                        KeyboardInput {
+                            state: ElementState::Pressed,
+                            virtual_keycode: Some(VirtualKeyCode::Escape),
                             ..
                         },
                         ..
-                    } =>  winit::event_loop::EventLoopWindowTarget::exit(&event_loop),
+                    } => *control_flow = ControlFlow::Exit,
                     WindowEvent::Resized(physical_size) => {
                         state.resize(*physical_size);
                     }
-                    WindowEvent::ScaleFactorChanged { inner_size_writer, .. } => {
-                        state.resize(**inner_size_writer);
-                    }
-                    WindowEvent::RedrawRequested => {
-                        state.update();
-                        match state.render() {
-                            Ok(_) => {}
-                            // Reconfigure the surface if lost
-                            Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
-                            // The system is out of memory, we should probably quit
-                            Err(wgpu::SurfaceError::OutOfMemory) => winit::event_loop::EventLoopWindowTarget::exit(&event_loop),
-                            // All other errors (Outdated, Timeout) should be resolved by the next frame
-                            Err(e) => eprintln!("{:?}", e),
-                        }
+                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                        state.resize(**new_inner_size);
                     }
                     _ => {}
                 }
             }
-        },
-        Event::AboutToWait => {
-            ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(16));
         }
-        Event::NewEvents(StartCause::ResumeTimeReached) => {
+        Event::RedrawRequested(window_id) if window_id == state.window().id() => {
+            state.update();
+            match state.render() {
+                Ok(_) => {}
+                // Reconfigure the surface if lost
+                Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
+                // The system is out of memory, we should probably quit
+                Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+                // All other errors (Outdated, Timeout) should be resolved by the next frame
+                Err(e) => eprintln!("{:?}", e),
+            }
+        }
+        Event::MainEventsCleared => {
+            // RedrawRequested will only trigger once, unless we manually
+            // request it.
             state.window().request_redraw();
         }
         _ => {}
