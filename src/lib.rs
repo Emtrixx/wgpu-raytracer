@@ -3,7 +3,7 @@ use crate::pipelines::compute_pipeline::create_compute_pipeline;
 use crate::pipelines::render_pipeline::create_render_pipeline;
 use types::vertex;
 use wgpu::util::DeviceExt;
-use wgpu::{Buffer, Device};
+use wgpu::{Buffer, Device, Gles3MinorVersion};
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -48,6 +48,8 @@ impl State {
             backends: wgpu::Backends::all(),
             // backends: wgpu::Backends::GL,
             dx12_shader_compiler: Default::default(),
+            flags: wgpu::InstanceFlags::default(),
+            gles_minor_version: Gles3MinorVersion::Version0,
         });
 
         // List adapters
@@ -371,6 +373,7 @@ impl State {
         {
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("My fancy compute pass"),
+                timestamp_writes: None,
             });
 
             cpass.set_pipeline(&self.rt_pipeline);
@@ -401,10 +404,12 @@ impl State {
                             b: 0.3,
                             a: 1.0,
                         }),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
             });
 
             render_pass.set_pipeline(&self.render_pipeline); // 2.

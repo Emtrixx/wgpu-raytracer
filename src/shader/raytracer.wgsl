@@ -106,20 +106,20 @@ fn main(globals: Globals) {
     var incoming_light: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
     for (var i = 0u; i < ray_count; i++) {
 
-//        let offset: vec3<f32> = vec3<f32>(rand(&state) * pixel_width, rand(&state) * pixel_height, 0.0);
-        let offset: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
+        let offset: vec3<f32> = vec3<f32>(rand(&state) * pixel_width, rand(&state) * pixel_height, 0.0);
+//        let offset: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
 
         incoming_light += trace_path(
-        Ray (
-             origin + offset,
-             normalize(viewPointWorld - origin),
-        ));
+            Ray (
+                 origin + offset,
+                 normalize(viewPointWorld - origin),
+            )
+        );
     }
-    incoming_light /= f32(ray_count);
+//    incoming_light /= f32(ray_count);
+    incoming_light /= rand_direction(&state);
 
     textureStore(color_buffer, globals.globalInvocationId.xy, vec4<f32>(incoming_light, 1.0));
-//    color = rand_direction(&state);
-//    textureStore(color_buffer, globals.globalInvocationId.xy, vec4<f32>(color, 1.0));
 }
 
 
@@ -153,11 +153,13 @@ fn trace_path(ray_param: Ray) -> vec3<f32> {
 
         if (closestHitInfo.hit) {
 
+//            incoming_light = closestHitInfo.normal;
+//            break;
+
             let dir = rand_hemisphere_direction(&state, closestHitInfo.normal);
 
             let bounce_ray: Ray = Ray (
                 closestHitInfo.position,
-//                normalize(closestHitInfo.normal + rand_direction(&state)),
                 dir,
             );
             ray = bounce_ray;
@@ -205,10 +207,11 @@ fn sphereIntersect(ray: Ray, sphere: Sphere) -> HitInfo {
     if (discriminant >= 0.0) {
         let distance = (-b - sqrt(discriminant)) / (2.0 * a);
 
-        let position = ray.origin + ray.direction * hitInfo.distance;
-        let normal = normalize(position - sphere.position);
-
         if (distance >= 0.0) {
+
+            let position = ray.origin + (ray.direction * distance);
+            let normal = normalize(position - sphere.position);
+
             hitInfo.hit = true;
             hitInfo.distance = distance;
             hitInfo.position = position + normal * 0.00001;
