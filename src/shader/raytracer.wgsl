@@ -18,7 +18,7 @@ struct Globals {
 @group(0) @binding(0) var color_buffer: texture_storage_2d<rgba8unorm, write>;
 
 // Camera
-@group(1) @binding(0)
+@group(0) @binding(1)
 var<uniform> camera: Camera;
 struct Camera {
    rotation: mat4x4<f32>,
@@ -30,8 +30,8 @@ struct Camera {
 
 
 // Spheres
-@group (2) @binding(0) var<uniform> sphereMetadata: SphereMetadata;
-@group (2) @binding(1) var<storage> spheres: array<Sphere>;
+@group (0) @binding(2) var<uniform> sphereMetadata: SphereMetadata;
+@group (0) @binding(3) var<storage> spheres: array<Sphere>;
 struct SphereMetadata {
     count: u32,
 }
@@ -43,8 +43,8 @@ struct Sphere {
 
 
 // Materials
-@group (3) @binding(0) var<uniform> materialMetadata: MaterialMetadata;
-@group (3) @binding(1) var<storage, read> materials: array<Material>;
+@group (0) @binding(4) var<uniform> materialMetadata: MaterialMetadata;
+@group (0) @binding(5) var<storage, read> materials: array<Material>;
 struct MaterialMetadata {
     count: u32,
 }
@@ -116,8 +116,8 @@ fn main(globals: Globals) {
             )
         );
     }
-//    incoming_light /= f32(ray_count);
-    incoming_light /= rand_direction(&state);
+    incoming_light /= f32(ray_count);
+//    incoming_light = rand_direction(&state);
 
     textureStore(color_buffer, globals.globalInvocationId.xy, vec4<f32>(incoming_light, 1.0));
 }

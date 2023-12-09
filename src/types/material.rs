@@ -24,8 +24,7 @@ pub struct MaterialUniform {
 
 pub struct MaterialState {
     pub buffer: wgpu::Buffer,
-    pub bind_group_layout: wgpu::BindGroupLayout,
-    pub bind_group: wgpu::BindGroup,
+    pub metadata_buffer: wgpu::Buffer,
     pub uniforms: Vec<MaterialUniform>,
 }
 
@@ -52,48 +51,9 @@ impl MaterialState {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
-        let object_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                label: Some("material_bind_group_layout"),
-            });
-
-        let object_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &object_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: material_metadata_buffer.as_entire_binding(),
-            },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: material_buffer.as_entire_binding(),
-                }],
-            label: Some("material_bind_group"),
-        });
-
         Self {
             buffer: material_buffer,
-            bind_group_layout: object_bind_group_layout,
-            bind_group: object_bind_group,
+            metadata_buffer: material_metadata_buffer,
             uniforms: material_uniforms,
         }
     }

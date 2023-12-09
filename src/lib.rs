@@ -106,6 +106,7 @@ impl State {
         };
         surface.configure(&device, &config);
 
+
         // Texture and Sampler
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
@@ -142,6 +143,12 @@ impl State {
         };
 
         let sampler = device.create_sampler(&sampler_desc);
+
+        let rt_texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(wgpu::TextureFormat::Rgba8Unorm),
+            ..Default::default()
+        });
+
 
         // Vertex buffer for quad surface
         let vertex_buffer = Self::create_vertex_buffer(&device);
@@ -196,46 +203,15 @@ impl State {
         let camera_state = CameraState::new(&device, &config);
 
         // Raytracing
-
-        let rt_texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
-            format: Some(wgpu::TextureFormat::Rgba8Unorm),
-            ..Default::default()
-        });
-
-        let rt_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("My fancy compute bindings"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture {
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        format: wgpu::TextureFormat::Rgba8Unorm,
-                        access: wgpu::StorageTextureAccess::WriteOnly,
-                    },
-                    count: None,
-                }],
-            });
-
-        let rt_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("My fancy compute bind group"),
-            layout: &rt_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&rt_texture_view),
-            }],
-        });
-
-        let rt_pipeline = create_compute_pipeline(
+        let (rt_pipeline, rt_bind_group) = create_compute_pipeline(
             &device,
-            &rt_bind_group_layout,
-            &camera_state.bind_group_layout,
-            &sphere_state.bind_group_layout,
-            &material_state.bind_group_layout,
+            &rt_texture_view,
+            &camera_state,
+            &sphere_state,
+            &material_state,
         );
 
         // Rendering
-
         let render_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Render Bind Group Layout"),
@@ -378,9 +354,6 @@ impl State {
 
             cpass.set_pipeline(&self.rt_pipeline);
             cpass.set_bind_group(0, &self.rt_bind_group, &[]);
-            cpass.set_bind_group(1, &self.camera_state.bind_group, &[]);
-            cpass.set_bind_group(2, &self.sphere_state.bind_group, &[]);
-            cpass.set_bind_group(3, &self.material_state.bind_group, &[]);
             cpass.dispatch_workgroups(self.config.width, self.config.height, 1);
         }
 
