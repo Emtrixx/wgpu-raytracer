@@ -1,5 +1,5 @@
-use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 use crate::camera::main_camera;
+use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 
 // TODO: Needs rework for free camera movement
 pub struct CameraController {

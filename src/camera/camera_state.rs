@@ -1,5 +1,5 @@
-use wgpu::Buffer;
 use wgpu::util::DeviceExt;
+use wgpu::Buffer;
 
 use crate::camera::camera_controller::CameraController;
 use crate::camera::main_camera::{Camera, CameraUniform};

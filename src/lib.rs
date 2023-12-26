@@ -1,20 +1,26 @@
 use crate::camera::camera_state::CameraState;
 use crate::pipelines::compute_pipeline::create_compute_pipeline;
 use crate::pipelines::render_pipeline::create_render_pipeline;
+use crate::types::globals::GlobalState;
+use crate::types::material::{Material, MaterialState};
+use std::thread::sleep;
 use types::vertex;
 use wgpu::util::DeviceExt;
-use wgpu::{Buffer, Device, Gles3MinorVersion};
+use wgpu::{
+    BindGroup, Buffer, Device, Gles3MinorVersion, RenderPipeline, Sampler, TextureFormat,
+    TextureView,
+};
+use winit::dpi::PhysicalSize;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
-use crate::types::globals::GlobalState;
-use crate::types::material::{Material, MaterialState};
 
 mod camera;
 mod pipelines;
 mod types;
+mod utils;
 
 struct State {
     surface: wgpu::Surface,
@@ -109,48 +115,10 @@ impl State {
         };
         surface.configure(&device, &config);
 
+        // Texture
+        let rt_texture_view = Self::create_rt_texture_view(&size, &device);
 
-        // Texture and Sampler
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: size.width,
-                height: size.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1, // We'll talk about this a little later
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            // Most images are stored using sRGB so we need to reflect that here.
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::COPY_DST
-                | wgpu::TextureUsages::STORAGE_BINDING,
-            // | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            label: Some("diffuse_texture"),
-            view_formats: &[],
-        });
-
-        let sampler_desc = wgpu::SamplerDescriptor {
-            label: Some("raytracing sampler"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            lod_min_clamp: 0.0,
-            lod_max_clamp: 100.0,
-            compare: None,
-            anisotropy_clamp: 1,
-            border_color: None,
-        };
-
-        let sampler = device.create_sampler(&sampler_desc);
-
-        let rt_texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
-            format: Some(wgpu::TextureFormat::Rgba8Unorm),
-            ..Default::default()
-        });
+        let sampler = Self::create_sampler(&device);
 
         // Vertex buffer for quad surface
         let vertex_buffer = Self::create_vertex_buffer(&device);
@@ -224,6 +192,34 @@ impl State {
         );
 
         // Rendering
+        let (render_bind_group, render_pipeline) =
+            Self::create_render_pipeline(&device, &config, &rt_texture_view, &sampler);
+
+        Self {
+            window,
+            surface,
+            device,
+            queue,
+            config,
+            size,
+            vertex_buffer,
+            global_state,
+            material_state,
+            sphere_state,
+            camera_state,
+            rt_pipeline,
+            rt_bind_group,
+            render_pipeline,
+            render_bind_group,
+        }
+    }
+
+    fn create_render_pipeline(
+        device: &Device,
+        config: &wgpu::SurfaceConfiguration,
+        rt_texture_view: &TextureView,
+        sampler: &Sampler,
+    ) -> (BindGroup, RenderPipeline) {
         let render_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Render Bind Group Layout"),
@@ -263,24 +259,55 @@ impl State {
         });
 
         let render_pipeline = create_render_pipeline(&config, &device, &render_bind_group_layout);
+        (render_bind_group, render_pipeline)
+    }
 
-        Self {
-            window,
-            surface,
-            device,
-            queue,
-            config,
-            size,
-            vertex_buffer,
-            global_state,
-            material_state,
-            sphere_state,
-            camera_state,
-            rt_pipeline,
-            rt_bind_group,
-            render_pipeline,
-            render_bind_group,
-        }
+    fn create_sampler(device: &Device) -> Sampler {
+        let sampler_desc = wgpu::SamplerDescriptor {
+            label: Some("raytracing sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 100.0,
+            compare: None,
+            anisotropy_clamp: 1,
+            border_color: None,
+        };
+
+        let sampler = device.create_sampler(&sampler_desc);
+        sampler
+    }
+
+    fn create_rt_texture_view(size: &PhysicalSize<u32>, device: &Device) -> TextureView {
+        // Texture and Sampler
+        let mut texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: size.width,
+                height: size.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1, // We'll talk about this a little later
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            // Most images are stored using sRGB so we need to reflect that here.
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::STORAGE_BINDING,
+            // | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            label: Some("diffuse_texture"),
+            view_formats: &[],
+        });
+        let rt_texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(wgpu::TextureFormat::Rgba8Unorm),
+            ..Default::default()
+        });
+
+        rt_texture_view
     }
 
     fn create_vertex_buffer(device: &Device) -> Buffer {
@@ -329,8 +356,36 @@ impl State {
         if new_size.width > 0 && new_size.height > 0 {
             self.size = new_size;
             self.config.height = new_size.height;
-            self.config.width = new_size.height;
-            self.surface.configure(&self.device, &self.config)
+            self.config.width = new_size.width;
+            self.surface.configure(&self.device, &self.config);
+
+            // camera
+            self.camera_state.object.aspect = self.config.width as f32 / self.config.height as f32;
+
+            /* recreate pipelines because of the new size */
+            // Compute
+            let rt_texture_view = Self::create_rt_texture_view(&new_size, &self.device);
+            let (rt_pipeline, rt_bind_group) = create_compute_pipeline(
+                &self.device,
+                &rt_texture_view,
+                &self.global_state,
+                &self.camera_state,
+                &self.sphere_state,
+                &self.material_state,
+            );
+            self.rt_pipeline = rt_pipeline;
+            self.rt_bind_group = rt_bind_group;
+
+            // Rendering
+            let sampler = Self::create_sampler(&self.device);
+            let (render_bind_group, render_pipeline) = Self::create_render_pipeline(
+                &self.device,
+                &self.config,
+                &rt_texture_view,
+                &sampler,
+            );
+            self.render_bind_group = render_bind_group;
+            self.render_pipeline = render_pipeline;
         }
     }
 
@@ -403,9 +458,24 @@ impl State {
 
         Ok(())
     }
+
+    fn render_to_gif(&mut self) -> Result<(), wgpu::SurfaceError> {
+        // TODO: bullshit
+        Ok(())
+    }
 }
 
 pub async fn run() {
+    // if GIF defined, render to GIF and exit
+    if std::env::var("GIF").is_ok() {
+        let event_loop = EventLoop::new();
+        let window = WindowBuilder::new().build(&event_loop).unwrap();
+
+        let mut state = State::new(window).await;
+        state.render_to_gif().unwrap();
+        return;
+    }
+
     env_logger::init();
 
     let event_loop = EventLoop::new();
@@ -423,11 +493,11 @@ pub async fn run() {
                     WindowEvent::CloseRequested
                     | WindowEvent::KeyboardInput {
                         input:
-                        KeyboardInput {
-                            state: ElementState::Pressed,
-                            virtual_keycode: Some(VirtualKeyCode::Escape),
-                            ..
-                        },
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::Escape),
+                                ..
+                            },
                         ..
                     } => *control_flow = ControlFlow::Exit,
                     WindowEvent::Resized(physical_size) => {

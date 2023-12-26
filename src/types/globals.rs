@@ -8,9 +8,7 @@ pub struct GlobalUniform {
 
 impl GlobalUniform {
     pub fn new() -> Self {
-        Self {
-            timestamp: 0,
-        }
+        Self { timestamp: 0 }
     }
 }
 
@@ -29,10 +27,7 @@ impl GlobalState {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        Self {
-            buffer,
-            uniform,
-        }
+        Self { buffer, uniform }
     }
 
     pub fn update(&mut self, queue: &wgpu::Queue) {

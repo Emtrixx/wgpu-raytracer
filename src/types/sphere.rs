@@ -7,7 +7,6 @@ pub struct Sphere {
     pub material_id: u32,
 }
 
-
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct SphereUniform {
@@ -23,7 +22,6 @@ pub struct SphereStorage {
     pub sphere_count: u32,
 }
 
-
 pub(crate) struct SphereState {
     // TODO: add lifetime to objects (Do I need them here?)
     // pub objects: &Vec<Sphere>,
@@ -35,7 +33,6 @@ pub(crate) struct SphereState {
 
 impl SphereState {
     pub fn new(objects: &Vec<Sphere>, device: &wgpu::Device) -> Self {
-
         let mut sphere_uniforms: Vec<SphereUniform> = vec![];
 
         for sphere in objects {
@@ -49,7 +46,6 @@ impl SphereState {
         }
 
         println!("Sphere count: {:?}", sphere_uniforms);
-
 
         let sphere_metadata_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Sphere Metadata Buffer"),
